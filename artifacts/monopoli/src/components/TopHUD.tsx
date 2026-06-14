@@ -54,17 +54,11 @@ export default function TopHUD({ gameState, currentPlayer, onToggleLog, onToggle
         <button
           onClick={onTogglePlayers}
           className="w-8 h-8 rounded-full bg-gray-800/80 border border-gray-600 flex items-center justify-center text-sm active:scale-95"
-          title="Pemain"
-        >
-          👥
-        </button>
+        >👥</button>
         <button
           onClick={onToggleLog}
           className="w-8 h-8 rounded-full bg-gray-800/80 border border-gray-600 flex items-center justify-center text-sm active:scale-95"
-          title="Log"
-        >
-          📋
-        </button>
+        >📋</button>
       </div>
     </div>
   );
