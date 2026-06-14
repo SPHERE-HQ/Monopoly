@@ -8,7 +8,7 @@ import { BOARD_TILES, GROUP_COLORS, PLAYER_COLORS, getTilePosition, getTileTextR
 interface Board3DProps {
   gameState: GameState;
   isRolling: boolean;
-  onTileClick?: (tileId: number) => void;
+  pawnPositions?: Record<number, number>;
 }
 
 function BoardBase() {
@@ -22,45 +22,27 @@ function BoardBase() {
         <boxGeometry args={[8.9, 0.01, 8.9]} />
         <meshStandardMaterial color="#2e7d32" roughness={0.9} />
       </mesh>
-      {[
-        [0, 0, 6.15] as [number,number,number],
-        [0, 0, -6.15] as [number,number,number],
-        [6.15, 0, 0] as [number,number,number],
-        [-6.15, 0, 0] as [number,number,number],
-      ].map((pos, i) => (
-        <mesh key={i} position={pos}>
-          <boxGeometry args={i < 2 ? [12.4, 0.02, 0.12] : [0.12, 0.02, 12.4]} />
+      {([
+        [0, 0, 6.15, 12.4, 0.02, 0.12],
+        [0, 0, -6.15, 12.4, 0.02, 0.12],
+        [6.15, 0, 0, 0.12, 0.02, 12.4],
+        [-6.15, 0, 0, 0.12, 0.02, 12.4],
+      ] as [number,number,number,number,number,number][]).map((d, i) => (
+        <mesh key={i} position={[d[0], d[1], d[2]]}>
+          <boxGeometry args={[d[3], d[4], d[5]]} />
           <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.3} metalness={0.8} roughness={0.2} />
         </mesh>
       ))}
-      <Text
-        position={[0, 0.07, 0.5]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.65}
-        color="#FFD700"
-        fontWeight="bold"
-        outlineWidth={0.04}
-        outlineColor="#1b5e20"
-      >
+      <Text position={[0, 0.07, 0.5]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.65}
+        color="#FFD700" fontWeight="bold" outlineWidth={0.04} outlineColor="#1b5e20">
         MONOPOLI
       </Text>
-      <Text
-        position={[0, 0.07, 1.35]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.22}
-        color="#a5d6a7"
-        outlineWidth={0.02}
-        outlineColor="#1b5e20"
-      >
+      <Text position={[0, 0.07, 1.35]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.22}
+        color="#a5d6a7" outlineWidth={0.02} outlineColor="#1b5e20">
         🇮🇩 Edisi Indonesia
       </Text>
     </group>
   );
-}
-
-function needsDarkText(color: string): boolean {
-  const bright = ["#fdd835", "#29b6f6", "#fb8c00", "#fffde7", "#ef9a9a", "#ff8f00", "#00acc1"];
-  return bright.includes(color);
 }
 
 function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: () => void }) {
@@ -89,51 +71,26 @@ function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: 
         </mesh>
       )}
       {!isCorner && (
-        <Text
-          position={[0, 0.062, 0.06]}
-          rotation={[-Math.PI / 2, 0, textRotY]}
-          fontSize={0.108}
-          color="#111111"
-          maxWidth={0.82}
-          lineHeight={1.15}
-          textAlign="center"
-          outlineWidth={0.008}
-          outlineColor="#ffffff"
-          anchorX="center"
-          anchorY="middle"
-          overflowWrap="break-word"
-        >
+        <Text position={[0, 0.062, 0.06]} rotation={[-Math.PI / 2, 0, textRotY]}
+          fontSize={0.108} color="#111111" maxWidth={0.82} lineHeight={1.15}
+          textAlign="center" outlineWidth={0.008} outlineColor="#ffffff"
+          anchorX="center" anchorY="middle" overflowWrap="break-word">
           {tile.name}
         </Text>
       )}
       {!isCorner && (tile.type === "property" || tile.type === "railroad" || tile.type === "utility") && (
-        <Text
-          position={[0, 0.062, 0.34]}
-          rotation={[-Math.PI / 2, 0, textRotY]}
-          fontSize={0.082}
-          color={groupColor}
-          maxWidth={0.82}
-          textAlign="center"
-          outlineWidth={0.01}
-          outlineColor="#ffffff"
-          anchorX="center"
-          anchorY="middle"
-        >
+        <Text position={[0, 0.062, 0.34]} rotation={[-Math.PI / 2, 0, textRotY]}
+          fontSize={0.082} color={groupColor} maxWidth={0.82}
+          textAlign="center" outlineWidth={0.01} outlineColor="#ffffff"
+          anchorX="center" anchorY="middle">
           {`M${tile.price}`}
         </Text>
       )}
       {isCorner && (
-        <Text
-          position={[0, 0.062, 0]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          fontSize={0.17}
-          color={tile.type === "go" ? "#e53935" : tile.type === "go-to-jail" ? "#e53935" : "#1a1a2e"}
-          fontWeight="bold"
-          outlineWidth={0.022}
-          outlineColor="#ffffff"
-          anchorX="center"
-          anchorY="middle"
-        >
+        <Text position={[0, 0.062, 0]} rotation={[-Math.PI / 2, 0, 0]}
+          fontSize={0.17} color={tile.type === "go" || tile.type === "go-to-jail" ? "#e53935" : "#1a1a2e"}
+          fontWeight="bold" outlineWidth={0.022} outlineColor="#ffffff"
+          anchorX="center" anchorY="middle">
           {tile.type === "go" ? "GO"
             : tile.type === "jail" ? "PENJARA"
             : tile.type === "free-parking" ? "PARKIR\nGRATIS"
@@ -144,49 +101,38 @@ function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: 
   );
 }
 
-// ── Rumah: kubus pendek hijau (1-2 rumah)
-// ── Apartemen: kubus sedang biru (3-4 rumah)
-// ── Hotel: kubus tinggi merah
-// ── Landmark: kubus tertinggi emas berputar
+// ── Rumah (1-2): kubus hijau pendek
+// ── Apartemen (3-4): kubus biru sedang
+// ── Hotel: kubus merah tinggi + antena emas
+// ── Landmark: kubus emas tertinggi, berputar
 function HousesMesh({ tile }: { tile: Tile }) {
   const pos = getTilePosition(tile.id);
 
   if (tile.landmark) return <LandmarkMesh pos={pos} />;
   if (tile.hotel)    return <HotelMesh pos={pos} />;
-  if (tile.houses === 0) return null;
+  if (!tile.houses)  return null;
 
-  const isApartemen = tile.houses >= 3;
-  const count        = tile.houses;
-  const h            = isApartemen ? 0.40 : 0.20;
-  const w            = isApartemen ? 0.18 : 0.15;
-  const color        = isApartemen ? "#3b82f6" : "#22c55e";
-  const emissive     = isApartemen ? "#1d4ed8" : "#15803d";
-  const label        = isApartemen ? "APT" : "🏠";
+  const isApt   = tile.houses >= 3;
+  const count   = tile.houses;
+  const h       = isApt ? 0.40 : 0.20;
+  const w       = isApt ? 0.18 : 0.15;
+  const color   = isApt ? "#3b82f6" : "#22c55e";
+  const emissive = isApt ? "#1d4ed8" : "#15803d";
+  const roofClr = isApt ? "#1e3a8a" : "#166534";
 
   return (
-    <group position={[pos[0], pos[1], pos[2]]}>
+    <group position={pos}>
       {Array.from({ length: count }).map((_, i) => {
         const xOff = (i - (count - 1) / 2) * (w + 0.04);
         return (
           <group key={i} position={[xOff, 0, 0]}>
-            {/* badan kubus */}
             <mesh position={[0, h / 2, 0]} castShadow>
               <boxGeometry args={[w, h, w]} />
-              <meshStandardMaterial
-                color={color}
-                emissive={emissive}
-                emissiveIntensity={0.35}
-                roughness={0.45}
-                metalness={0.1}
-              />
+              <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={0.35} roughness={0.45} />
             </mesh>
-            {/* atap pipih lebih gelap */}
             <mesh position={[0, h + 0.015, 0]}>
               <boxGeometry args={[w + 0.02, 0.03, w + 0.02]} />
-              <meshStandardMaterial
-                color={isApartemen ? "#1e3a8a" : "#166534"}
-                roughness={0.6}
-              />
+              <meshStandardMaterial color={roofClr} roughness={0.6} />
             </mesh>
           </group>
         );
@@ -196,27 +142,17 @@ function HousesMesh({ tile }: { tile: Tile }) {
 }
 
 function HotelMesh({ pos }: { pos: [number, number, number] }) {
-  const h = 0.58;
-  const w = 0.30;
+  const h = 0.58; const w = 0.30;
   return (
-    <group position={[pos[0], pos[1], pos[2]]}>
-      {/* badan hotel */}
+    <group position={pos}>
       <mesh position={[0, h / 2, 0]} castShadow>
         <boxGeometry args={[w, h, w]} />
-        <meshStandardMaterial
-          color="#ef4444"
-          emissive="#b91c1c"
-          emissiveIntensity={0.45}
-          roughness={0.35}
-          metalness={0.1}
-        />
+        <meshStandardMaterial color="#ef4444" emissive="#b91c1c" emissiveIntensity={0.45} roughness={0.35} />
       </mesh>
-      {/* atap hotel */}
       <mesh position={[0, h + 0.02, 0]}>
         <boxGeometry args={[w + 0.04, 0.04, w + 0.04]} />
         <meshStandardMaterial color="#7f1d1d" roughness={0.5} />
       </mesh>
-      {/* tiang antena kecil */}
       <mesh position={[0, h + 0.10, 0]}>
         <boxGeometry args={[0.03, 0.14, 0.03]} />
         <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.8} metalness={1} roughness={0} />
@@ -226,36 +162,26 @@ function HotelMesh({ pos }: { pos: [number, number, number] }) {
 }
 
 function LandmarkMesh({ pos }: { pos: [number, number, number] }) {
-  const meshRef  = useRef<THREE.Mesh>(null);
-  const roofRef  = useRef<THREE.Mesh>(null);
-  const h        = 0.78;
-  const w        = 0.26;
+  const bodyRef  = useRef<THREE.Mesh>(null);
+  const crownRef = useRef<THREE.Mesh>(null);
+  const h = 0.78; const w = 0.26;
 
   useFrame((_, delta) => {
-    if (meshRef.current)  meshRef.current.rotation.y  += delta * 1.6;
-    if (roofRef.current)  roofRef.current.rotation.y  -= delta * 2.0;
+    if (bodyRef.current)  bodyRef.current.rotation.y  += delta * 1.6;
+    if (crownRef.current) crownRef.current.rotation.y -= delta * 2.2;
   });
 
   return (
-    <group position={[pos[0], pos[1], pos[2]]}>
-      {/* alas */}
+    <group position={pos}>
       <mesh position={[0, 0.025, 0]}>
         <boxGeometry args={[w + 0.08, 0.05, w + 0.08]} />
         <meshStandardMaterial color="#B8860B" emissive="#DAA520" emissiveIntensity={0.5} metalness={0.9} roughness={0.1} />
       </mesh>
-      {/* badan landmark – berputar */}
-      <mesh ref={meshRef} position={[0, h / 2 + 0.05, 0]} castShadow>
+      <mesh ref={bodyRef} position={[0, h / 2 + 0.05, 0]} castShadow>
         <boxGeometry args={[w, h, w]} />
-        <meshStandardMaterial
-          color="#FFD700"
-          emissive="#FFA500"
-          emissiveIntensity={0.7}
-          metalness={0.9}
-          roughness={0.05}
-        />
+        <meshStandardMaterial color="#FFD700" emissive="#FFA500" emissiveIntensity={0.7} metalness={0.9} roughness={0.05} />
       </mesh>
-      {/* mahkota berputar berlawanan */}
-      <mesh ref={roofRef} position={[0, h + 0.08, 0]}>
+      <mesh ref={crownRef} position={[0, h + 0.08, 0]}>
         <boxGeometry args={[w + 0.06, 0.06, w + 0.06]} />
         <meshStandardMaterial color="#FFFFFF" emissive="#FFDD00" emissiveIntensity={2.0} metalness={1} roughness={0} />
       </mesh>
@@ -263,17 +189,21 @@ function LandmarkMesh({ pos }: { pos: [number, number, number] }) {
   );
 }
 
-function PlayerPawn({
-  player, allPlayers, isMoving,
-}: {
+function PlayerPawn({ player, allPlayers, isMoving, overridePosition }: {
   player: GameState["players"][0];
   allPlayers: GameState["players"];
   isMoving: boolean;
+  overridePosition?: number;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const pos = getTilePosition(player.position);
+  const effectivePos = overridePosition ?? player.position;
+  const pos = getTilePosition(effectivePos);
   const color = PLAYER_COLORS[player.color] || "#ffffff";
-  const samePos = allPlayers.filter(p => p.position === player.position && !p.bankrupt);
+
+  const samePos = allPlayers.filter(p => {
+    const ep = overridePosition !== undefined && p.id === player.id ? overridePosition : p.position;
+    return ep === effectivePos && !p.bankrupt;
+  });
   const idx = samePos.findIndex(p => p.id === player.id);
   const offsetX = (idx % 2) * 0.32 - 0.16;
   const offsetZ = Math.floor(idx / 2) * 0.32 - 0.16;
@@ -283,12 +213,12 @@ function PlayerPawn({
     if (!groupRef.current) return;
     timeRef.current += delta;
     if (isMoving) {
-      const bounce = Math.abs(Math.sin(timeRef.current * 12)) * 0.35;
-      groupRef.current.position.y = pos[1] + 0.25 + bounce;
-      groupRef.current.rotation.y += delta * 8;
+      const bounce = Math.abs(Math.sin(timeRef.current * 14)) * 0.40;
+      groupRef.current.position.set(pos[0] + offsetX, pos[1] + 0.25 + bounce, pos[2] + offsetZ);
+      groupRef.current.rotation.y += delta * 10;
     } else {
       const idle = Math.sin(timeRef.current * 2 + player.id) * 0.04;
-      groupRef.current.position.y = pos[1] + 0.25 + idle;
+      groupRef.current.position.set(pos[0] + offsetX, pos[1] + 0.25 + idle, pos[2] + offsetZ);
       groupRef.current.rotation.y += delta * 0.8;
     }
   });
@@ -317,18 +247,18 @@ function PlayerPawn({
   );
 }
 
-function AnimatedDie({ finalValue, offset, isRolling, rollSeed }: {
-  finalValue: number; offset: [number, number, number]; isRolling: boolean; rollSeed: number;
+function AnimatedDie({ finalValue, offset, isRolling, seed }: {
+  finalValue: number; offset: [number, number, number]; isRolling: boolean; seed: number;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const timeRef = useRef(0);
+  const t = useRef(0);
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
-    timeRef.current += delta;
+    t.current += delta;
     if (isRolling) {
-      meshRef.current.rotation.x += delta * 18 * (rollSeed % 2 === 0 ? 1 : -1);
-      meshRef.current.rotation.z += delta * 14 * (rollSeed % 3 === 0 ? 1 : -1);
+      meshRef.current.rotation.x += delta * 18 * (seed % 2 ? 1 : -1);
+      meshRef.current.rotation.z += delta * 14 * (seed % 3 ? 1 : -1);
       meshRef.current.rotation.y += delta * 10;
     } else {
       meshRef.current.rotation.x = THREE.MathUtils.lerp(meshRef.current.rotation.x, 0, delta * 5);
@@ -336,13 +266,13 @@ function AnimatedDie({ finalValue, offset, isRolling, rollSeed }: {
     }
   });
 
-  const dotPositions: Record<number, [number, number, number][]> = {
-    1: [[0, 0, 0]],
-    2: [[-0.11, 0.11, 0], [0.11, -0.11, 0]],
-    3: [[-0.11, 0.11, 0], [0, 0, 0], [0.11, -0.11, 0]],
-    4: [[-0.11, 0.11, 0], [0.11, 0.11, 0], [-0.11, -0.11, 0], [0.11, -0.11, 0]],
-    5: [[-0.11, 0.11, 0], [0.11, 0.11, 0], [0, 0, 0], [-0.11, -0.11, 0], [0.11, -0.11, 0]],
-    6: [[-0.11, 0.11, 0], [0.11, 0.11, 0], [-0.11, 0, 0], [0.11, 0, 0], [-0.11, -0.11, 0], [0.11, -0.11, 0]],
+  const dotPos: Record<number, [number, number, number][]> = {
+    1: [[0,0,0]],
+    2: [[-0.11,0.11,0],[0.11,-0.11,0]],
+    3: [[-0.11,0.11,0],[0,0,0],[0.11,-0.11,0]],
+    4: [[-0.11,0.11,0],[0.11,0.11,0],[-0.11,-0.11,0],[0.11,-0.11,0]],
+    5: [[-0.11,0.11,0],[0.11,0.11,0],[0,0,0],[-0.11,-0.11,0],[0.11,-0.11,0]],
+    6: [[-0.11,0.11,0],[0.11,0.11,0],[-0.11,0,0],[0.11,0,0],[-0.11,-0.11,0],[0.11,-0.11,0]],
   };
 
   return (
@@ -351,7 +281,7 @@ function AnimatedDie({ finalValue, offset, isRolling, rollSeed }: {
         <boxGeometry args={[0.44, 0.44, 0.44]} />
         <meshStandardMaterial color="white" roughness={0.15} metalness={0.1} />
       </mesh>
-      {!isRolling && (dotPositions[finalValue] || []).map((dp, i) => (
+      {!isRolling && (dotPos[finalValue] || []).map((dp, i) => (
         <mesh key={i} position={[dp[0], dp[1], 0.23]}>
           <sphereGeometry args={[0.046, 8, 8]} />
           <meshStandardMaterial color="#111" />
@@ -361,35 +291,28 @@ function AnimatedDie({ finalValue, offset, isRolling, rollSeed }: {
   );
 }
 
-export default function Board3D({ gameState, isRolling, onTileClick }: Board3DProps) {
+export default function Board3D({ gameState, isRolling, pawnPositions = {} }: Board3DProps) {
   const isMoving = gameState.phase === "moving";
+  const currentPId = gameState.players[gameState.currentPlayerIndex]?.id;
 
   return (
     <div className="w-full h-full">
       <Canvas
         shadows
         camera={{ position: [0, 14, 10], fov: 45 }}
-        style={{
-          background: "linear-gradient(160deg, #e0f7fa 0%, #b2ebf2 25%, #e8f5e9 55%, #fff9c4 100%)",
-        }}
+        style={{ background: "linear-gradient(160deg, #e0f7fa 0%, #b2ebf2 25%, #e8f5e9 55%, #fff9c4 100%)" }}
       >
         <ambientLight intensity={1.2} color="#fff8f0" />
-        <directionalLight
-          position={[8, 18, 8]}
-          intensity={1.5}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-          color="#fff5e0"
-        />
+        <directionalLight position={[8, 18, 8]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} color="#fff5e0" />
         <directionalLight position={[-8, 10, -8]} intensity={0.6} color="#e0f0ff" />
         <pointLight position={[0, 10, 0]} intensity={0.8} color="#ffffff" />
-        <pointLight position={[6, 4, 6]}  intensity={0.4} color="#ffe082" />
+        <pointLight position={[6, 4, 6]} intensity={0.4} color="#ffe082" />
         <pointLight position={[-6, 4, -6]} intensity={0.4} color="#b3e5fc" />
 
         <BoardBase />
 
         {BOARD_TILES.map(tile => (
-          <TileMesh key={tile.id} tile={tile} onClick={() => onTileClick?.(tile.id)} />
+          <TileMesh key={tile.id} tile={tile} />
         ))}
 
         {gameState.tiles.map(tile => (
@@ -401,25 +324,20 @@ export default function Board3D({ gameState, isRolling, onTileClick }: Board3DPr
             key={player.id}
             player={player}
             allPlayers={gameState.players}
-            isMoving={isMoving && player.id === gameState.players[gameState.currentPlayerIndex].id}
+            isMoving={isMoving && player.id === currentPId}
+            overridePosition={pawnPositions[player.id]}
           />
         ))}
 
         {gameState.lastRoll && (
           <group position={[0, 0.7, 0]}>
-            <AnimatedDie finalValue={gameState.lastRoll[0]} offset={[-0.45, 0, 0]} isRolling={isRolling} rollSeed={1} />
-            <AnimatedDie finalValue={gameState.lastRoll[1]} offset={[0.45, 0, 0]} isRolling={isRolling} rollSeed={2} />
+            <AnimatedDie finalValue={gameState.lastRoll[0]} offset={[-0.45, 0, 0]} isRolling={isRolling} seed={1} />
+            <AnimatedDie finalValue={gameState.lastRoll[1]} offset={[0.45, 0, 0]} isRolling={isRolling} seed={2} />
           </group>
         )}
 
-        <OrbitControls
-          enablePan={false}
-          minDistance={8}
-          maxDistance={22}
-          minPolarAngle={Math.PI / 6}
-          maxPolarAngle={Math.PI / 2.5}
-          target={[0, 0, 0]}
-        />
+        <OrbitControls enablePan={false} minDistance={8} maxDistance={22}
+          minPolarAngle={Math.PI / 6} maxPolarAngle={Math.PI / 2.5} target={[0, 0, 0]} />
       </Canvas>
     </div>
   );
