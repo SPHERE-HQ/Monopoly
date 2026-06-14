@@ -28,7 +28,6 @@ export default function PlayerOverlay({ gameState, currentPlayer, onClose }: Pla
           <h3 className="text-white font-bold text-sm uppercase tracking-wider">Status Pemain</h3>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 text-xs">✕</button>
         </div>
-
         <div className="space-y-2">
           {gameState.players.map(player => {
             const isCurrent = player.id === currentPlayer.id;
@@ -54,13 +53,9 @@ export default function PlayerOverlay({ gameState, currentPlayer, onClose }: Pla
                   {player.bankrupt && (
                     <span className="text-[10px] bg-red-800 text-white px-1.5 py-0.5 rounded font-bold">BANGKRUT</span>
                   )}
-                  {player.inJail && !player.bankrupt && (
-                    <span className="text-xs">🔒</span>
-                  )}
+                  {player.inJail && !player.bankrupt && <span className="text-xs">🔒</span>}
                 </div>
-                <div className="text-green-400 font-black text-lg">
-                  M{player.money.toLocaleString()}
-                </div>
+                <div className="text-green-400 font-black text-lg">M{player.money.toLocaleString()}</div>
                 {player.getOutOfJailCards > 0 && (
                   <div className="text-[11px] text-blue-300 mt-0.5">🃏 Bebas Penjara ×{player.getOutOfJailCards}</div>
                 )}
@@ -68,11 +63,16 @@ export default function PlayerOverlay({ gameState, currentPlayer, onClose }: Pla
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {player.properties.map(pid => {
                       const tile = BOARD_TILES[pid];
+                      const gs = gameState.tiles[pid];
                       return (
-                        <div key={pid} className="w-3 h-3 rounded-sm flex-shrink-0"
-                          style={{ backgroundColor: GROUP_DOT[tile.group] ?? "#666" }}
+                        <div key={pid}
+                          className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px]"
+                          style={{ backgroundColor: `${GROUP_DOT[tile.group] ?? "#666"}33`, border: `1px solid ${GROUP_DOT[tile.group] ?? "#666"}66` }}
                           title={tile.name}
-                        />
+                        >
+                          <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: GROUP_DOT[tile.group] ?? "#666" }} />
+                          {gs?.landmark ? "🏛️" : gs?.hotel ? "🏨" : gs?.houses > 0 ? (gs.houses >= 3 ? "🏢" : "🏠") : ""}
+                        </div>
                       );
                     })}
                   </div>
