@@ -41,7 +41,6 @@ export default function Setup({ onStart }: SetupProps) {
 
       <div className="w-full" style={{ maxWidth: "min(420px, 90vw)" }}>
         <div className="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
-
           <div className="p-4 border-b border-gray-700">
             <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Jumlah Pemain</p>
             <div className="flex gap-2">
@@ -99,30 +98,19 @@ export default function Setup({ onStart }: SetupProps) {
               onClick={handleStart}
               className="w-full rounded-2xl font-black text-black transition-all active:scale-95 shadow-lg shadow-orange-500/30"
               style={{
-                background: "linear-gradient(135deg, #f59e0b, #ef4444)",
-                fontSize: "clamp(1rem, 4vw, 1.25rem)",
                 minHeight: 56,
+                background: "linear-gradient(135deg, #fbbf24, #f97316)",
+                fontSize: "1.1rem",
               }}
             >
-              🎲 MULAI BERMAIN!
+              🎲 Mulai Permainan
             </button>
           </div>
         </div>
 
-        <div className="mt-3 bg-gray-800/40 rounded-xl p-3 border border-gray-700/60">
-          <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1.5">📋 Aturan Singkat</div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-            {[
-              "🎲 Lempar dadu & jelajahi papan",
-              "🏘️ Beli properti kota Indonesia",
-              "💰 Kenakan sewa ke pemain lain",
-              "🏠 Bangun rumah & hotel",
-              "🔒 Hindari penjara!",
-              "🏆 Terakhir tidak bangkrut menang",
-            ].map((r, i) => (
-              <div key={i} className="text-[11px] text-gray-500">{r}</div>
-            ))}
-          </div>
+        <div className="mt-4 text-center text-gray-600 text-xs space-y-1">
+          <div>Gesek dadu untuk lempar • Pion berjalan tiap langkah</div>
+          <div>Landmark hanya bisa dibangun saat mendarat di hotel milikmu</div>
         </div>
       </div>
     </div>
