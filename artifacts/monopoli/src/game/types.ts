@@ -29,8 +29,8 @@ export interface Tile {
   houses: number;
   hotel: boolean;
   landmark?: boolean;
+  landmarkReady?: boolean;
   mortgaged: boolean;
-
 }
 
 export interface Player {
@@ -97,6 +97,8 @@ export interface GameState {
   currentCard: CardDeck | null;
   pendingRent: { amount: number; ownerId: number } | null;
   log: string[];
+  moveOrigin?: number;
+  buildingFromLanding?: boolean;
 }
 
 export interface DiceRoll {
