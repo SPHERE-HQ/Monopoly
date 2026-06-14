@@ -3,12 +3,13 @@ import { GameState, Player } from "../game/types";
 import {
   createInitialState, getCurrentPlayer, handleLanding, performRoll,
   buyProperty, skipBuying, payRent, payTax, applyCard,
-  releaseFromJail, buildHouse
+  releaseFromJail, buildHouse,
 } from "../game/engine";
 import Board3D from "../components/Board3D";
-import PlayerPanel from "../components/PlayerPanel";
-import ActionPanel from "../components/ActionPanel";
-import GameLog from "../components/GameLog";
+import TopHUD from "../components/TopHUD";
+import ActionSheet from "../components/ActionSheet";
+import PlayerOverlay from "../components/PlayerOverlay";
+import LogOverlay from "../components/LogOverlay";
 import { PLAYER_COLORS } from "../game/board";
 
 interface GameProps {
@@ -22,176 +23,153 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
   const [gameState, setGameState] = useState<GameState>(() =>
     createInitialState(
       playerSetup.map(p => p.name),
-      playerSetup.map(p => p.color)
-    )
+      playerSetup.map(p => p.color),
+    ),
   );
   const [isRolling, setIsRolling] = useState(false);
-  const rollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showPlayers, setShowPlayers] = useState(false);
+  const [showLog, setShowLog] = useState(false);
+  const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentPlayer: Player = getCurrentPlayer(gameState);
 
-  // Auto-trigger landing after "moving" phase
+  // Auto-land after moving phase
   useEffect(() => {
-    if (gameState.phase === "moving") {
-      const timer = setTimeout(() => {
-        setGameState(prev => handleLanding(prev));
-      }, 700);
-      return () => clearTimeout(timer);
-    }
+    if (gameState.phase !== "moving") return;
+    const t = setTimeout(() => setGameState(prev => handleLanding(prev)), 700);
+    return () => clearTimeout(t);
   }, [gameState.phase, gameState.players[gameState.currentPlayerIndex]?.position]);
 
-  const handleRoll = useCallback(() => {
-    // Start rolling animation, then apply the roll result after ROLL_ANIM_MS
+  const triggerRoll = useCallback(() => {
     setIsRolling(true);
-    if (rollTimerRef.current) clearTimeout(rollTimerRef.current);
-    rollTimerRef.current = setTimeout(() => {
+    if (rollTimer.current) clearTimeout(rollTimer.current);
+    rollTimer.current = setTimeout(() => {
       setIsRolling(false);
       setGameState(prev => performRoll(prev));
     }, ROLL_ANIM_MS);
   }, []);
 
-  const handleBuy = useCallback(() => setGameState(prev => buyProperty(prev)), []);
-  const handleSkipBuy = useCallback(() => setGameState(prev => skipBuying(prev)), []);
-  const handlePayRent = useCallback(() => setGameState(prev => payRent(prev)), []);
-  const handlePayTax = useCallback(() => setGameState(prev => payTax(prev)), []);
-  const handleCardAction = useCallback(() => setGameState(prev => applyCard(prev)), []);
-
   const handleJailAction = useCallback((method: "card" | "pay" | "roll") => {
-    if (method === "roll") {
-      setIsRolling(true);
-      if (rollTimerRef.current) clearTimeout(rollTimerRef.current);
-      rollTimerRef.current = setTimeout(() => {
-        setIsRolling(false);
-        setGameState(prev => performRoll(prev));
-      }, ROLL_ANIM_MS);
-    } else {
-      setGameState(prev => releaseFromJail(prev, method));
-    }
-  }, []);
+    if (method === "roll") triggerRoll();
+    else setGameState(prev => releaseFromJail(prev, method));
+  }, [triggerRoll]);
 
-  const handleJailContinue = useCallback(() => {
-    setGameState(prev => ({ ...prev, phase: "rolling" }));
-  }, []);
-
-  const handleBuildHouse = useCallback((tileId: number) => {
-    setGameState(prev => buildHouse(prev, tileId));
-  }, []);
-
-  const handleEndBuilding = useCallback(() => {
+  const handleToggleBuilding = useCallback(() => {
     setGameState(prev => ({
       ...prev,
-      phase: prev.phase === "building" ? "rolling" : "building"
+      phase: prev.phase === "building" ? "rolling" : "building",
     }));
   }, []);
 
   const color = PLAYER_COLORS[currentPlayer.color];
 
   return (
-    <div className="h-screen w-screen flex bg-gray-900 overflow-hidden landscape-only">
-      {/* Left panel */}
-      <div className="w-52 flex-shrink-0 bg-gray-800 border-r border-gray-700 flex flex-col p-2 gap-2 overflow-y-auto">
-        <div className="text-xs text-gray-500 font-bold uppercase tracking-wider px-1">Pemain</div>
-        <PlayerPanel gameState={gameState} currentPlayer={currentPlayer} />
-        <GameLog log={gameState.log} />
+    <div className="relative w-screen h-screen overflow-hidden bg-gray-950 touch-none select-none">
+
+      {/* ── 3D Board — full screen ─────────────────────────────────── */}
+      <div className="absolute inset-0">
+        <Board3D gameState={gameState} isRolling={isRolling} />
       </div>
 
-      {/* Center — 3D Board */}
-      <div className="flex-1 relative min-w-0">
-        <Board3D
-          gameState={gameState}
-          isRolling={isRolling}
-          onTileClick={undefined}
-        />
+      {/* ── Top HUD ────────────────────────────────────────────────── */}
+      <TopHUD
+        gameState={gameState}
+        currentPlayer={currentPlayer}
+        onTogglePlayers={() => { setShowPlayers(v => !v); setShowLog(false); }}
+        onToggleLog={() => { setShowLog(v => !v); setShowPlayers(false); }}
+      />
 
-        {/* Floating message */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/75 backdrop-blur-sm text-white text-xs font-semibold px-4 py-2 rounded-full max-w-[280px] text-center border border-white/10 pointer-events-none">
+      {/* ── Message banner ─────────────────────────────────────────── */}
+      <div className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none"
+        style={{ top: 52 }}>
+        <div
+          className="text-white text-xs font-semibold px-4 py-1.5 rounded-full text-center border border-white/10 max-w-[70vw] truncate"
+          style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
+        >
           {isRolling ? "🎲 Melempar dadu..." : gameState.message}
         </div>
-
-        {/* Dice emoji overlay at bottom */}
-        {gameState.lastRoll && !isRolling && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 pointer-events-none">
-            {gameState.lastRoll.map((val, i) => (
-              <div
-                key={i}
-                className="w-11 h-11 bg-white rounded-xl flex items-center justify-center text-xl font-black text-gray-900 shadow-xl border-2 border-gray-200 select-none"
-                style={{ animation: "diceSettle 0.3s ease-out" }}
-              >
-                {["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][val]}
-              </div>
-            ))}
-            <div className="w-11 h-11 bg-gray-800 rounded-xl flex items-center justify-center text-sm font-bold text-yellow-300 border-2 border-gray-600">
-              ={gameState.lastRoll[0] + gameState.lastRoll[1]}
-            </div>
-          </div>
-        )}
-
-        {/* Rolling animation overlay */}
-        {isRolling && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 pointer-events-none">
-            {[0, 1].map(i => (
-              <div
-                key={i}
-                className="w-11 h-11 bg-white rounded-xl flex items-center justify-center text-xl font-black text-gray-900 shadow-xl border-2 border-yellow-400 select-none"
-                style={{ animation: `diceRoll 0.15s ease-in-out infinite` }}
-              >
-                {["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][Math.floor(Math.random() * 6)]}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* Right panel */}
+      {/* ── Dice emoji strip (bottom center, above action sheet) ───── */}
+      {gameState.lastRoll && !isRolling && gameState.phase !== "moving" && (
+        <div className="absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none"
+          style={{ bottom: 78 }}>
+          {gameState.lastRoll.map((val, i) => (
+            <div key={i}
+              className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl font-black text-gray-900 shadow-xl select-none"
+              style={{ animation: "diceSettle .3s ease-out" }}>
+              {["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][val]}
+            </div>
+          ))}
+          <div className="w-10 h-10 bg-gray-800 border border-gray-600 rounded-xl flex items-center justify-center text-sm font-bold text-yellow-300">
+            ={gameState.lastRoll[0] + gameState.lastRoll[1]}
+          </div>
+        </div>
+      )}
+
+      {/* Dice rolling shimmer */}
+      {isRolling && (
+        <div className="absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none"
+          style={{ bottom: 78 }}>
+          {[0, 1].map(i => (
+            <div key={i}
+              className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl font-black text-gray-900 border-2 border-yellow-400 select-none"
+              style={{ animation: "diceRoll .12s ease-in-out infinite" }}>
+              {["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][Math.floor(Math.random() * 6)]}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Current player mini badge (bottom-left) ────────────────── */}
       <div
-        className="w-56 flex-shrink-0 border-l flex flex-col p-3"
+        className="absolute left-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full pointer-events-none"
         style={{
-          borderColor: `${color}44`,
-          background: "linear-gradient(180deg, #1f2937 0%, #111827 100%)"
+          bottom: 78,
+          background: `${color}22`,
+          border: `1px solid ${color}66`,
+          backdropFilter: "blur(6px)",
         }}
       >
-        {/* Current player */}
-        <div className="mb-3 pb-3 border-b border-gray-700">
-          <div className="flex items-center gap-2 mb-1">
-            <div
-              className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
-            />
-            <span className="text-white font-bold text-sm truncate">{currentPlayer.name}</span>
-          </div>
-          <div className="text-green-400 font-black text-lg">M{currentPlayer.money.toLocaleString()}</div>
-          {currentPlayer.inJail && (
-            <div className="text-xs text-orange-400 mt-0.5">
-              🔒 Penjara ({currentPlayer.jailTurns}/3)
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex-1 overflow-y-auto">
-          <ActionPanel
-            gameState={gameState}
-            currentPlayer={currentPlayer}
-            onRoll={handleRoll}
-            onBuy={handleBuy}
-            onSkipBuy={handleSkipBuy}
-            onPayRent={handlePayRent}
-            onPayTax={handlePayTax}
-            onCardAction={handleCardAction}
-            onJailAction={handleJailAction}
-            onJailContinue={handleJailContinue}
-            onBuildHouse={handleBuildHouse}
-            onEndBuilding={handleEndBuilding}
-            onRestartGame={onRestart}
-          />
-        </div>
-
-        <div className="pt-2 border-t border-gray-700 mt-2">
-          <div className="text-xs text-gray-600 text-center">
-            <span className="text-gray-500">{gameState.phase}</span>
-          </div>
-        </div>
+        <div className="w-2.5 h-2.5 rounded-full animate-pulse"
+          style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
+        <span className="text-white font-bold text-xs">{currentPlayer.name}</span>
+        <span className="text-green-400 font-black text-xs">M{currentPlayer.money.toLocaleString()}</span>
+        {currentPlayer.inJail && <span className="text-[10px]">🔒</span>}
       </div>
+
+      {/* ── Action Sheet (bottom) ──────────────────────────────────── */}
+      <ActionSheet
+        gameState={gameState}
+        currentPlayer={currentPlayer}
+        isRolling={isRolling}
+        onRoll={triggerRoll}
+        onBuy={() => setGameState(prev => buyProperty(prev))}
+        onSkipBuy={() => setGameState(prev => skipBuying(prev))}
+        onPayRent={() => setGameState(prev => payRent(prev))}
+        onPayTax={() => setGameState(prev => payTax(prev))}
+        onCardAction={() => setGameState(prev => applyCard(prev))}
+        onJailAction={handleJailAction}
+        onJailContinue={() => setGameState(prev => ({ ...prev, phase: "rolling" }))}
+        onBuildHouse={id => setGameState(prev => buildHouse(prev, id))}
+        onToggleBuilding={handleToggleBuilding}
+        onRestartGame={onRestart}
+      />
+
+      {/* ── Overlays ───────────────────────────────────────────────── */}
+      {showPlayers && (
+        <PlayerOverlay
+          gameState={gameState}
+          currentPlayer={currentPlayer}
+          onClose={() => setShowPlayers(false)}
+        />
+      )}
+      {showLog && (
+        <LogOverlay
+          log={gameState.log}
+          onClose={() => setShowLog(false)}
+        />
+      )}
     </div>
   );
 }

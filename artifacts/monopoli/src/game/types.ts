@@ -14,6 +14,7 @@ export type TileType =
 export interface Tile {
   id: number;
   name: string;
+  shortName?: string;
   type: TileType;
   group: PropertyGroup;
   price?: number;
