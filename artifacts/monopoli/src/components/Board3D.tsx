@@ -14,17 +14,14 @@ interface Board3DProps {
 function BoardBase() {
   return (
     <group>
-      {/* Outer board surface — cream/white */}
       <mesh position={[0, -0.05, 0]} receiveShadow>
         <boxGeometry args={[12.4, 0.1, 12.4]} />
         <meshStandardMaterial color="#fffde7" roughness={0.8} />
       </mesh>
-      {/* Inner center — bright green felt */}
       <mesh position={[0, 0.005, 0]}>
         <boxGeometry args={[8.9, 0.01, 8.9]} />
         <meshStandardMaterial color="#2e7d32" roughness={0.9} />
       </mesh>
-      {/* Border frame — gold */}
       {[
         [0, 0, 6.15] as [number,number,number],
         [0, 0, -6.15] as [number,number,number],
@@ -61,7 +58,6 @@ function BoardBase() {
   );
 }
 
-/* Decide if text should be dark or light based on tile background */
 function needsDarkText(color: string): boolean {
   const bright = ["#fdd835", "#29b6f6", "#fb8c00", "#fffde7", "#ef9a9a", "#ff8f00", "#00acc1"];
   return bright.includes(color);
@@ -71,40 +67,27 @@ function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: 
   const pos = getTilePosition(tile.id);
   const groupColor = GROUP_COLORS[tile.group] || "#cccccc";
   const isCorner = ["go", "jail", "free-parking", "go-to-jail"].includes(tile.type);
-
   const size: [number, number, number] = isCorner ? [1.1, 0.09, 1.1] : [1.04, 0.07, 0.92];
-
   const textRotY = getTileTextRotation(tile.id);
-  const useDark = needsDarkText(groupColor);
-  const textColor = useDark ? "#1a1a1a" : "#ffffff";
-
-  const displayName = tile.name;
 
   return (
     <group position={pos} onClick={onClick}>
-      {/* Tile body — white/cream base for readability */}
       <mesh castShadow receiveShadow>
         <boxGeometry args={size} />
         <meshStandardMaterial color={isCorner ? groupColor : "#fafafa"} roughness={0.7} />
       </mesh>
-
-      {/* Color band on top for property tiles */}
       {tile.type === "property" && (
         <mesh position={[0, 0.048, -0.31]}>
           <boxGeometry args={[0.92, 0.008, 0.26]} />
           <meshStandardMaterial color={groupColor} emissive={groupColor} emissiveIntensity={0.25} />
         </mesh>
       )}
-
-      {/* Colored accent strip for non-corner special tiles */}
       {!isCorner && tile.type !== "property" && (
         <mesh position={[0, 0.047, -0.35]}>
           <boxGeometry args={[0.92, 0.006, 0.16]} />
           <meshStandardMaterial color={groupColor} emissive={groupColor} emissiveIntensity={0.35} />
         </mesh>
       )}
-
-      {/* Tile name text — clear, dark on white body */}
       {!isCorner && (
         <Text
           position={[0, 0.062, 0.06]}
@@ -120,11 +103,9 @@ function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: 
           anchorY="middle"
           overflowWrap="break-word"
         >
-          {displayName}
+          {tile.name}
         </Text>
       )}
-
-      {/* Price label below name for buyable tiles */}
       {!isCorner && (tile.type === "property" || tile.type === "railroad" || tile.type === "utility") && (
         <Text
           position={[0, 0.062, 0.34]}
@@ -141,8 +122,6 @@ function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: 
           {`M${tile.price}`}
         </Text>
       )}
-
-      {/* Corner labels */}
       {isCorner && (
         <Text
           position={[0, 0.062, 0]}
@@ -165,46 +144,49 @@ function TileMesh({ tile, onClick }: { tile: (typeof BOARD_TILES)[0]; onClick?: 
   );
 }
 
+// ── Rumah: kubus pendek hijau (1-2 rumah)
+// ── Apartemen: kubus sedang biru (3-4 rumah)
+// ── Hotel: kubus tinggi merah
+// ── Landmark: kubus tertinggi emas berputar
 function HousesMesh({ tile }: { tile: Tile }) {
   const pos = getTilePosition(tile.id);
 
   if (tile.landmark) return <LandmarkMesh pos={pos} />;
-
-  if (tile.hotel) {
-    return (
-      <group position={[pos[0], pos[1], pos[2]]}>
-        <mesh position={[0, 0.18, 0]} castShadow>
-          <boxGeometry args={[0.38, 0.26, 0.38]} />
-          <meshStandardMaterial color="#cc0000" emissive="#ff3300" emissiveIntensity={0.5} roughness={0.3} />
-        </mesh>
-        <mesh position={[0, 0.34, 0]} castShadow>
-          <coneGeometry args={[0.22, 0.16, 4]} />
-          <meshStandardMaterial color="#990000" emissive="#cc2200" emissiveIntensity={0.4} />
-        </mesh>
-        <mesh position={[0, 0.45, 0]}>
-          <sphereGeometry args={[0.06, 8, 8]} />
-          <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={1} />
-        </mesh>
-      </group>
-    );
-  }
-
+  if (tile.hotel)    return <HotelMesh pos={pos} />;
   if (tile.houses === 0) return null;
 
-  const count = tile.houses;
+  const isApartemen = tile.houses >= 3;
+  const count        = tile.houses;
+  const h            = isApartemen ? 0.40 : 0.20;
+  const w            = isApartemen ? 0.18 : 0.15;
+  const color        = isApartemen ? "#3b82f6" : "#22c55e";
+  const emissive     = isApartemen ? "#1d4ed8" : "#15803d";
+  const label        = isApartemen ? "APT" : "🏠";
+
   return (
     <group position={[pos[0], pos[1], pos[2]]}>
       {Array.from({ length: count }).map((_, i) => {
-        const xOff = (i - (count - 1) / 2) * 0.22;
+        const xOff = (i - (count - 1) / 2) * (w + 0.04);
         return (
           <group key={i} position={[xOff, 0, 0]}>
-            <mesh position={[0, 0.1, 0]} castShadow>
-              <boxGeometry args={[0.16, 0.14, 0.16]} />
-              <meshStandardMaterial color="#00cc44" emissive="#00ff66" emissiveIntensity={0.3} roughness={0.5} />
+            {/* badan kubus */}
+            <mesh position={[0, h / 2, 0]} castShadow>
+              <boxGeometry args={[w, h, w]} />
+              <meshStandardMaterial
+                color={color}
+                emissive={emissive}
+                emissiveIntensity={0.35}
+                roughness={0.45}
+                metalness={0.1}
+              />
             </mesh>
-            <mesh position={[0, 0.21, 0]} castShadow>
-              <coneGeometry args={[0.12, 0.11, 4]} />
-              <meshStandardMaterial color="#006622" emissive="#009933" emissiveIntensity={0.25} />
+            {/* atap pipih lebih gelap */}
+            <mesh position={[0, h + 0.015, 0]}>
+              <boxGeometry args={[w + 0.02, 0.03, w + 0.02]} />
+              <meshStandardMaterial
+                color={isApartemen ? "#1e3a8a" : "#166534"}
+                roughness={0.6}
+              />
             </mesh>
           </group>
         );
@@ -213,42 +195,69 @@ function HousesMesh({ tile }: { tile: Tile }) {
   );
 }
 
+function HotelMesh({ pos }: { pos: [number, number, number] }) {
+  const h = 0.58;
+  const w = 0.30;
+  return (
+    <group position={[pos[0], pos[1], pos[2]]}>
+      {/* badan hotel */}
+      <mesh position={[0, h / 2, 0]} castShadow>
+        <boxGeometry args={[w, h, w]} />
+        <meshStandardMaterial
+          color="#ef4444"
+          emissive="#b91c1c"
+          emissiveIntensity={0.45}
+          roughness={0.35}
+          metalness={0.1}
+        />
+      </mesh>
+      {/* atap hotel */}
+      <mesh position={[0, h + 0.02, 0]}>
+        <boxGeometry args={[w + 0.04, 0.04, w + 0.04]} />
+        <meshStandardMaterial color="#7f1d1d" roughness={0.5} />
+      </mesh>
+      {/* tiang antena kecil */}
+      <mesh position={[0, h + 0.10, 0]}>
+        <boxGeometry args={[0.03, 0.14, 0.03]} />
+        <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.8} metalness={1} roughness={0} />
+      </mesh>
+    </group>
+  );
+}
+
 function LandmarkMesh({ pos }: { pos: [number, number, number] }) {
-  const starRef = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Mesh>(null);
+  const meshRef  = useRef<THREE.Mesh>(null);
+  const roofRef  = useRef<THREE.Mesh>(null);
+  const h        = 0.78;
+  const w        = 0.26;
 
   useFrame((_, delta) => {
-    if (starRef.current) starRef.current.rotation.y += delta * 1.8;
-    if (ringRef.current) ringRef.current.rotation.z += delta * 0.9;
+    if (meshRef.current)  meshRef.current.rotation.y  += delta * 1.6;
+    if (roofRef.current)  roofRef.current.rotation.y  -= delta * 2.0;
   });
 
   return (
     <group position={[pos[0], pos[1], pos[2]]}>
-      <mesh position={[0, 0.06, 0]} castShadow>
-        <cylinderGeometry args={[0.22, 0.28, 0.1, 8]} />
-        <meshStandardMaterial color="#B8860B" emissive="#DAA520" emissiveIntensity={0.6} metalness={0.9} roughness={0.1} />
+      {/* alas */}
+      <mesh position={[0, 0.025, 0]}>
+        <boxGeometry args={[w + 0.08, 0.05, w + 0.08]} />
+        <meshStandardMaterial color="#B8860B" emissive="#DAA520" emissiveIntensity={0.5} metalness={0.9} roughness={0.1} />
       </mesh>
-      <mesh position={[0, 0.35, 0]} castShadow>
-        <cylinderGeometry args={[0.07, 0.14, 0.52, 6]} />
-        <meshStandardMaterial color="#FFD700" emissive="#FFA500" emissiveIntensity={0.7} metalness={0.9} roughness={0.1} />
+      {/* badan landmark – berputar */}
+      <mesh ref={meshRef} position={[0, h / 2 + 0.05, 0]} castShadow>
+        <boxGeometry args={[w, h, w]} />
+        <meshStandardMaterial
+          color="#FFD700"
+          emissive="#FFA500"
+          emissiveIntensity={0.7}
+          metalness={0.9}
+          roughness={0.05}
+        />
       </mesh>
-      {[0.18, 0.35, 0.52].map((y, i) => (
-        <mesh key={i} position={[0, y, 0]}>
-          <torusGeometry args={[0.1, 0.015, 6, 16]} />
-          <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={1} metalness={1} roughness={0} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.65, 0]} castShadow>
-        <coneGeometry args={[0.1, 0.18, 4]} />
-        <meshStandardMaterial color="#FFD700" emissive="#FFAA00" emissiveIntensity={0.9} metalness={1} roughness={0} />
-      </mesh>
-      <mesh ref={starRef} position={[0, 0.82, 0]}>
-        <octahedronGeometry args={[0.08, 0]} />
-        <meshStandardMaterial color="#FFFFFF" emissive="#FFDD00" emissiveIntensity={2.5} metalness={1} roughness={0} />
-      </mesh>
-      <mesh ref={ringRef} position={[0, 0.55, 0]}>
-        <torusGeometry args={[0.18, 0.012, 8, 24]} />
-        <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={1.8} metalness={1} roughness={0} transparent opacity={0.7} />
+      {/* mahkota berputar berlawanan */}
+      <mesh ref={roofRef} position={[0, h + 0.08, 0]}>
+        <boxGeometry args={[w + 0.06, 0.06, w + 0.06]} />
+        <meshStandardMaterial color="#FFFFFF" emissive="#FFDD00" emissiveIntensity={2.0} metalness={1} roughness={0} />
       </mesh>
     </group>
   );
@@ -364,7 +373,6 @@ export default function Board3D({ gameState, isRolling, onTileClick }: Board3DPr
           background: "linear-gradient(160deg, #e0f7fa 0%, #b2ebf2 25%, #e8f5e9 55%, #fff9c4 100%)",
         }}
       >
-        {/* Bright, cheerful lighting */}
         <ambientLight intensity={1.2} color="#fff8f0" />
         <directionalLight
           position={[8, 18, 8]}
