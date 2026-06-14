@@ -28,12 +28,76 @@ jobs:
         with:
           version: 10
 
+      # ── Prepare CI: resolve catalog: entries, strip @workspace/ deps ──────
+      #    The Replit monorepo uses pnpm catalog: and workspace: references
+      #    that don't exist in this standalone repo — patch them before install.
+      - name: Prepare CI environment
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+
+          // 1. Replace pnpm-workspace.yaml with one that only lists monopoli
+          fs.writeFileSync('pnpm-workspace.yaml', [
+            'packages:',
+            '  - artifacts/monopoli',
+            'autoInstallPeers: false',
+            '',
+          ].join('\n'));
+          console.log('✅ pnpm-workspace.yaml → only artifacts/monopoli');
+
+          // 2. Catalog version map (mirrors root pnpm-workspace.yaml catalog)
+          const catalog = {
+            '@replit/vite-plugin-cartographer': '^0.5.1',
+            '@replit/vite-plugin-dev-banner': '^0.1.1',
+            '@replit/vite-plugin-runtime-error-modal': '^0.0.6',
+            '@tailwindcss/vite': '^4.1.14',
+            '@tanstack/react-query': '^5.90.21',
+            '@types/node': '^25.3.3',
+            '@types/react': '^19.2.0',
+            '@types/react-dom': '^19.2.0',
+            '@vitejs/plugin-react': '^5.0.4',
+            'class-variance-authority': '^0.7.1',
+            'clsx': '^2.1.1',
+            'framer-motion': '^12.23.24',
+            'lucide-react': '^0.545.0',
+            'react': '19.1.0',
+            'react-dom': '19.1.0',
+            'tailwind-merge': '^3.3.1',
+            'tailwindcss': '^4.1.14',
+            'tsx': '^4.21.0',
+            'vite': '^7.3.2',
+            'wouter': '^3.3.5',
+            'zod': '^3.25.76',
+          };
+
+          // 3. Patch artifacts/monopoli/package.json
+          const pkgPath = 'artifacts/monopoli/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+          function resolve(deps) {
+            if (!deps) return {};
+            const out = {};
+            for (const [k, v] of Object.entries(deps)) {
+              if (k.startsWith('@workspace/')) {
+                console.log('  skip @workspace dep:', k);
+                continue;
+              }
+              out[k] = v === 'catalog:' ? (catalog[k] ?? '*') : v;
+            }
+            return out;
+          }
+
+          pkg.devDependencies = resolve(pkg.devDependencies);
+          pkg.dependencies    = resolve(pkg.dependencies);
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+          console.log('✅ package.json patched (catalog resolved, @workspace removed)');
+          EOF
+
       - name: Cache pnpm store
-        id: pnpm-cache
         uses: actions/cache@v4
         with:
           path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('artifacts/monopoli/package.json') }}
           restore-keys: ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
@@ -48,9 +112,6 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          build-tools-version: "34.0.0"
 
       # ── Build web app ──────────────────────────────────────────────────────
       - name: Build web app (Vite)
@@ -62,10 +123,10 @@ jobs:
           PORT: "3000"
 
       # ── Capacitor ─────────────────────────────────────────────────────────
-      - name: Install Capacitor CLI globally
+      - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli@latest
 
-      - name: Capacitor add & sync Android
+      - name: Capacitor sync Android
         working-directory: artifacts/monopoli
         run: |
           if [ ! -d "android" ]; then
@@ -88,7 +149,7 @@ jobs:
         working-directory: artifacts/monopoli/android
         run: chmod +x gradlew
 
-      # ── Build debug APK (always) ──────────────────────────────────────────
+      # ── Build debug APK ───────────────────────────────────────────────────
       - name: Build debug APK
         working-directory: artifacts/monopoli/android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
@@ -100,7 +161,7 @@ jobs:
           path: artifacts/monopoli/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # ── Build release APK (signed, always on main) ────────────────────────
+      # ── Build release APK (signed) ────────────────────────────────────────
       - name: Decode keystore
         working-directory: artifacts/monopoli/android
         env:
