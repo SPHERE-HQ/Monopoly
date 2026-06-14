@@ -46,3 +46,21 @@
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-12px); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Paksa layar landscape di perangkat portrait (CSS fallback).
+   Screen Orientation API digunakan via JS di App.tsx.
+   Ini adalah fallback untuk browser yang tidak mendukung API.
+═══════════════════════════════════════════════════════════════ */
+@media screen and (orientation: portrait) and (hover: none) and (pointer: coarse) {
+  html {
+    transform: rotate(-90deg);
+    transform-origin: left top;
+    width: 100dvh;
+    height: 100dvw;
+    overflow: hidden;
+    position: fixed;
+    top: 100%;
+    left: 0;
+  }
+}
