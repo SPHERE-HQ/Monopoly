@@ -14,7 +14,6 @@
     overflow: hidden;
     width: 100%;
     height: 100%;
-    /* Lock to landscape on mobile */
     touch-action: manipulation;
   }
 

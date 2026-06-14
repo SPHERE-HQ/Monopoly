@@ -1,4 +1,4 @@
-import { GameState, Player, Tile, DiceRoll, CardDeck } from "./types";
+import { GameState, Player, Tile, DiceRoll } from "./types";
 import { BOARD_TILES } from "./board";
 import { CHANCE_CARDS, COMMUNITY_CARDS, shuffleCards } from "./cards";
 
@@ -8,7 +8,7 @@ export function rollDice(): DiceRoll {
   return { d1, d2, isDouble: d1 === d2 };
 }
 
-export function createInitialState(playerNames: string[], playerColors: string[]): GameState {
+export function createInitialState(playerNames: string[], _playerColors: string[]): GameState {
   const players: Player[] = playerNames.map((name, i) => ({
     id: i,
     name,
@@ -23,17 +23,17 @@ export function createInitialState(playerNames: string[], playerColors: string[]
     isActive: true,
   }));
 
-  const tiles: Tile[] = BOARD_TILES.map(t => ({ ...t }));
+  const tiles: Tile[] = BOARD_TILES.map(t => ({ ...t, landmark: false }));
 
   return {
     players,
     tiles,
     currentPlayerIndex: 0,
-    phase: "rolling",
+    phase: "hold-dice",
     dice: [1, 1],
     lastRoll: null,
     doublesCount: 0,
-    message: `Giliran ${players[0].name}! Lempar dadu.`,
+    message: `Giliran ${players[0].name}! Tahan dadu untuk lempar.`,
     winner: null,
     chanceCards: shuffleCards(CHANCE_CARDS),
     communityCards: shuffleCards(COMMUNITY_CARDS),
@@ -61,6 +61,57 @@ export function movePlayer(state: GameState, steps: number): GameState {
   return newState;
 }
 
+export function performRollWithValues(state: GameState, d1: number, d2: number): GameState {
+  const newState = deepClone(state);
+  const player = newState.players[newState.currentPlayerIndex];
+  const isDouble = d1 === d2;
+  newState.dice = [d1, d2];
+  newState.lastRoll = [d1, d2];
+
+  if (player.inJail) {
+    if (isDouble) {
+      player.inJail = false;
+      player.jailTurns = 0;
+      newState.message = `${player.name} lempar ganda dan bebas dari penjara!`;
+      newState.log.push(`${player.name} bebas dari penjara dengan doubles!`);
+      return moveAndLand(newState, d1 + d2);
+    } else {
+      player.jailTurns++;
+      if (player.jailTurns >= 3) {
+        player.money -= 50;
+        player.inJail = false;
+        player.jailTurns = 0;
+        newState.message = `${player.name} bayar M50 keluar penjara!`;
+        return moveAndLand(newState, d1 + d2);
+      }
+      newState.message = `${player.name} tidak dapat ganda (${d1}+${d2}). Giliran ke ${player.jailTurns}/3.`;
+      newState.log.push(`${player.name} masih di penjara (${player.jailTurns}/3)`);
+      newState.phase = "jail";
+      return advanceTurn(newState);
+    }
+  }
+
+  if (isDouble) {
+    newState.doublesCount++;
+    if (newState.doublesCount >= 3) {
+      player.position = 10;
+      player.inJail = true;
+      player.jailTurns = 0;
+      newState.doublesCount = 0;
+      newState.message = `${player.name} lempar ganda 3 kali! Masuk penjara!`;
+      newState.log.push(`${player.name} masuk penjara karena doubles 3x!`);
+      newState.phase = "jail";
+      return advanceTurn(newState);
+    }
+  } else {
+    newState.doublesCount = 0;
+  }
+
+  newState.message = `${player.name} lempar ${d1 + d2} (${d1}+${d2})${isDouble ? " - Doubles!" : ""}`;
+  newState.log.push(`${player.name} lempar ${d1}+${d2}=${d1 + d2}`);
+  return moveAndLand(newState, d1 + d2);
+}
+
 export function handleLanding(state: GameState): GameState {
   const newState = deepClone(state);
   const player = newState.players[newState.currentPlayerIndex];
@@ -70,18 +121,18 @@ export function handleLanding(state: GameState): GameState {
 
   switch (tile.type) {
     case "go":
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       newState.message = `${player.name} mendarat di GO!`;
       newState.log.push(`${player.name} mendarat di GO!`);
       return advanceTurn(newState);
 
     case "jail":
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       newState.message = `${player.name} hanya berkunjung ke Penjara.`;
       return advanceTurn(newState);
 
     case "free-parking":
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       newState.message = `${player.name} parkir gratis!`;
       newState.log.push(`${player.name} parkir gratis!`);
       return advanceTurn(newState);
@@ -118,20 +169,27 @@ export function handleLanding(state: GameState): GameState {
         newState.phase = "buying";
         newState.message = `${player.name} mendarat di ${tile.name} (M${tile.price}). Beli?`;
       } else if (tile.ownerId === player.id) {
-        newState.phase = "rolling";
+        newState.phase = "hold-dice";
         newState.message = `${player.name} mendarat di properti sendiri.`;
         return advanceTurn(newState);
       } else if (tile.mortgaged) {
-        newState.phase = "rolling";
+        newState.phase = "hold-dice";
         newState.message = `${tile.name} sedang dijaminkan, tidak ada sewa.`;
         return advanceTurn(newState);
       } else {
         const rent = calculateRent(newState, tile, player);
         const owner = newState.players.find(p => p.id === tile.ownerId)!;
+        const canRebut = !tile.landmark && player.money >= rent + (tile.price ?? 0);
         newState.phase = "paying-rent";
         newState.pendingRent = { amount: rent, ownerId: owner.id };
-        newState.message = `${player.name} harus bayar sewa M${rent} ke ${owner.name}!`;
-        newState.log.push(`${player.name} bayar sewa M${rent} ke ${owner.name} di ${tile.name}`);
+        if (tile.landmark) {
+          newState.message = `${player.name} di LANDMARK ${tile.name}! Sewa ×2 = M${rent}. Tidak bisa direbut!`;
+        } else if (canRebut) {
+          newState.message = `${player.name} di ${tile.name} milik ${owner.name}. Sewa M${rent} atau rebut?`;
+        } else {
+          newState.message = `${player.name} harus bayar sewa M${rent} ke ${owner.name}!`;
+        }
+        newState.log.push(`${player.name} mendarat di ${tile.landmark ? "🏛️ LANDMARK " : ""}${tile.name} (${owner.name}) — sewa M${rent}`);
       }
       return newState;
 
@@ -156,11 +214,10 @@ function calculateRent(state: GameState, tile: Tile, _payer: Player): number {
     return tile.utilityMultiplier![ownedUtils - 1] * diceTotal;
   }
 
-  // Property
+  if (tile.landmark) return tile.rent![5] * 2;
   if (tile.hotel) return tile.rent![5];
   if (tile.houses > 0) return tile.rent![tile.houses];
 
-  // Check if owner has all tiles in group (monopoly)
   const groupTiles = state.tiles.filter(t => t.group === tile.group && t.type === "property");
   const allOwned = groupTiles.every(t => t.ownerId === tile.ownerId);
   if (allOwned) return tile.rent![0] * 2;
@@ -206,32 +263,24 @@ export function applyCard(state: GameState): GameState {
     case "money": {
       player.money += action.amount;
       newState.currentCard = null;
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       return advanceTurn(newState);
     }
     case "money-per-player": {
       const others = newState.players.filter(p => p.id !== player.id && !p.bankrupt);
       if (action.amount > 0) {
-        // receive from others
-        others.forEach(p => {
-          p.money -= action.amount;
-          player.money += action.amount;
-        });
+        others.forEach(p => { p.money -= action.amount; player.money += action.amount; });
       } else {
-        // pay others
-        others.forEach(p => {
-          player.money += action.amount;
-          p.money -= action.amount;
-        });
+        others.forEach(p => { player.money += action.amount; p.money -= action.amount; });
       }
       newState.currentCard = null;
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       return advanceTurn(newState);
     }
     case "get-out-of-jail": {
       player.getOutOfJailCards++;
       newState.currentCard = null;
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       return advanceTurn(newState);
     }
     case "go-to-jail": {
@@ -256,7 +305,7 @@ export function applyCard(state: GameState): GameState {
       player.money -= cost;
       newState.log.push(`${player.name} bayar perbaikan M${cost}`);
       newState.currentCard = null;
-      newState.phase = "rolling";
+      newState.phase = "hold-dice";
       return advanceTurn(newState);
     }
     case "move-to-nearest-railroad": {
@@ -264,9 +313,7 @@ export function applyCard(state: GameState): GameState {
       const nearest = railroads.reduce((prev, curr) =>
         Math.abs(curr - player.position) < Math.abs(prev - player.position) ? curr : prev
       );
-      if (nearest < player.position) {
-        player.money += 200;
-      }
+      if (nearest < player.position) player.money += 200;
       player.position = nearest;
       newState.currentCard = null;
       return handleLanding(newState);
@@ -276,9 +323,7 @@ export function applyCard(state: GameState): GameState {
       const nearest = utilities.reduce((prev, curr) =>
         Math.abs(curr - player.position) < Math.abs(prev - player.position) ? curr : prev
       );
-      if (nearest < player.position) {
-        player.money += 200;
-      }
+      if (nearest < player.position) player.money += 200;
       player.position = nearest;
       newState.currentCard = null;
       return handleLanding(newState);
@@ -289,29 +334,50 @@ export function applyCard(state: GameState): GameState {
   }
 }
 
-export function buyProperty(state: GameState): GameState {
+export function buyProperty(state: GameState, initialHouses = 0): GameState {
   const newState = deepClone(state);
   const player = newState.players[newState.currentPlayerIndex];
   const tile = newState.tiles[player.position];
 
-  if (player.money < (tile.price ?? 0)) {
+  const groupTiles = newState.tiles.filter(
+    t => t.group === tile.group && t.type === "property"
+  );
+  const ownsGroup = groupTiles.every(
+    t => t.ownerId === player.id || t.id === tile.id
+  );
+
+  const housesToBuild = ownsGroup ? initialHouses : 0;
+  const houseCostTotal = housesToBuild * (tile.houseCost ?? 0);
+  const totalCost = (tile.price ?? 0) + houseCostTotal;
+
+  if (player.money < totalCost) {
     newState.message = "Uang tidak cukup!";
-    newState.phase = "rolling";
+    newState.phase = "hold-dice";
     return advanceTurn(newState);
   }
 
-  player.money -= tile.price ?? 0;
+  player.money -= totalCost;
   tile.ownerId = player.id;
   player.properties.push(tile.id);
-  newState.log.push(`${player.name} membeli ${tile.name} seharga M${tile.price}`);
-  newState.phase = "rolling";
-  newState.message = `${player.name} membeli ${tile.name}!`;
+
+  let buildMsg = "";
+  if (housesToBuild > 0 && housesToBuild <= 4) {
+    tile.houses = housesToBuild;
+    buildMsg = ` + ${housesToBuild} rumah`;
+  } else if (housesToBuild === 5) {
+    tile.hotel = true;
+    buildMsg = ` + hotel`;
+  }
+
+  newState.log.push(`${player.name} membeli ${tile.name} (M${tile.price})${buildMsg}`);
+  newState.phase = "hold-dice";
+  newState.message = `${player.name} membeli ${tile.name}${buildMsg}!`;
   return advanceTurn(newState);
 }
 
 export function skipBuying(state: GameState): GameState {
   const newState = deepClone(state);
-  newState.phase = "rolling";
+  newState.phase = "hold-dice";
   newState.message = `${getCurrentPlayer(newState).name} melewati pembelian.`;
   return advanceTurn(newState);
 }
@@ -326,7 +392,7 @@ export function payRent(state: GameState): GameState {
   player.money -= actualPay;
   owner.money += actualPay;
   newState.pendingRent = null;
-  newState.phase = "rolling";
+  newState.phase = "hold-dice";
 
   if (player.money <= 0) {
     player.bankrupt = true;
@@ -344,13 +410,51 @@ export function payRent(state: GameState): GameState {
   return checkWinner(advanceTurn(newState));
 }
 
+export function rebutProperty(state: GameState): GameState {
+  const newState = deepClone(state);
+  const player = newState.players[newState.currentPlayerIndex];
+  const tile = newState.tiles[player.position];
+
+  if (tile.landmark) {
+    newState.message = "🏛️ Landmark tidak bisa direbut!";
+    return newState;
+  }
+
+  const { amount: rent, ownerId } = newState.pendingRent!;
+  const owner = newState.players.find(p => p.id === ownerId)!;
+  const totalCost = rent + (tile.price ?? 0);
+
+  if (player.money < totalCost) {
+    newState.message = "Uang tidak cukup untuk merebut!";
+    return newState;
+  }
+
+  player.money -= totalCost;
+  owner.money += rent;
+
+  const oldIdx = owner.properties.indexOf(tile.id);
+  if (oldIdx !== -1) owner.properties.splice(oldIdx, 1);
+  tile.ownerId = player.id;
+  tile.houses = 0;
+  tile.hotel = false;
+  player.properties.push(tile.id);
+
+  newState.pendingRent = null;
+  newState.log.push(
+    `${player.name} MEREBUT ${tile.name} dari ${owner.name}! (sewa M${rent} + harga M${tile.price})`
+  );
+  newState.message = `${player.name} berhasil merebut ${tile.name}!`;
+  newState.phase = "hold-dice";
+  return checkWinner(advanceTurn(newState));
+}
+
 export function payTax(state: GameState): GameState {
   const newState = deepClone(state);
   const player = newState.players[newState.currentPlayerIndex];
   const tile = newState.tiles[player.position];
   player.money -= tile.taxAmount ?? 0;
   newState.log.push(`${player.name} bayar pajak M${tile.taxAmount}`);
-  newState.phase = "rolling";
+  newState.phase = "hold-dice";
   return advanceTurn(newState);
 }
 
@@ -363,24 +467,16 @@ export function releaseFromJail(state: GameState, method: "card" | "pay" | "roll
     player.inJail = false;
     player.jailTurns = 0;
     newState.message = `${player.name} bebas dari penjara pakai kartu!`;
+    newState.phase = "hold-dice";
   } else if (method === "pay") {
     if (player.money >= 50) {
       player.money -= 50;
       player.inJail = false;
       player.jailTurns = 0;
       newState.message = `${player.name} bayar M50 dan bebas dari penjara!`;
-    }
-  } else if (method === "roll") {
-    // Will attempt double on next roll
-    player.jailTurns++;
-    if (player.jailTurns >= 3) {
-      player.money -= 50;
-      player.inJail = false;
-      player.jailTurns = 0;
-      newState.message = `${player.name} harus bayar M50 setelah 3 giliran di penjara!`;
+      newState.phase = "hold-dice";
     }
   }
-  newState.phase = "rolling";
   return newState;
 }
 
@@ -390,11 +486,21 @@ export function buildHouse(state: GameState, tileId: number): GameState {
   const tile = newState.tiles[tileId];
 
   if (tile.ownerId !== player.id) return newState;
-  if (tile.hotel) return newState;
+  if (tile.landmark) return newState;
 
   const groupTiles = newState.tiles.filter(t => t.group === tile.group && t.type === "property");
   const allOwned = groupTiles.every(t => t.ownerId === player.id);
   if (!allOwned) return newState;
+
+  if (tile.hotel) {
+    const landmarkCost = (tile.hotelCost ?? tile.houseCost ?? 0) * 2;
+    if (player.money < landmarkCost) return newState;
+    player.money -= landmarkCost;
+    tile.hotel = false;
+    tile.landmark = true;
+    newState.log.push(`${player.name} bangun 🏛️ LANDMARK di ${tile.name}! Tidak bisa direbut, sewa ×2`);
+    return newState;
+  }
 
   const cost = tile.houseCost ?? 0;
   if (player.money < cost) return newState;
@@ -402,11 +508,12 @@ export function buildHouse(state: GameState, tileId: number): GameState {
   player.money -= cost;
   if (tile.houses < 4) {
     tile.houses++;
-    newState.log.push(`${player.name} bangun rumah di ${tile.name}`);
+    const icons = ["", "🏠", "🏠🏠", "🏠🏠🏠", "🏠🏠🏠🏠"];
+    newState.log.push(`${player.name} bangun ${icons[tile.houses]} di ${tile.name}`);
   } else {
     tile.houses = 0;
     tile.hotel = true;
-    newState.log.push(`${player.name} bangun hotel di ${tile.name}`);
+    newState.log.push(`${player.name} bangun 🏨 Hotel di ${tile.name}`);
   }
 
   return newState;
@@ -417,7 +524,7 @@ function advanceTurn(state: GameState): GameState {
 
   if (state.doublesCount > 0 && state.phase !== "jail") {
     newState.doublesCount = 0;
-    newState.phase = "rolling";
+    newState.phase = "hold-dice";
     newState.message = `${getCurrentPlayer(newState).name} dapat giliran lagi (doubles)!`;
     return newState;
   }
@@ -430,13 +537,13 @@ function advanceTurn(state: GameState): GameState {
     tries++;
   }
   newState.currentPlayerIndex = next;
-  newState.phase = "rolling";
+  newState.phase = "hold-dice";
   const nextPlayer = newState.players[next];
 
   if (nextPlayer.inJail) {
-    newState.message = `${nextPlayer.name} di penjara (giliran ${nextPlayer.jailTurns + 1}/3). Lempar dadu atau bayar M50.`;
+    newState.message = `${nextPlayer.name} di penjara (giliran ${nextPlayer.jailTurns + 1}/3). Tahan dadu atau bayar M50.`;
   } else {
-    newState.message = `Giliran ${nextPlayer.name}! Lempar dadu.`;
+    newState.message = `Giliran ${nextPlayer.name}! Tahan dadu untuk lempar.`;
   }
 
   return newState;
@@ -459,54 +566,8 @@ function deepClone<T>(obj: T): T {
 }
 
 export function performRoll(state: GameState): GameState {
-  const newState = deepClone(state);
-  const player = newState.players[newState.currentPlayerIndex];
-  const roll = rollDice();
-  newState.dice = [roll.d1, roll.d2];
-  newState.lastRoll = [roll.d1, roll.d2];
-
-  if (player.inJail) {
-    if (roll.isDouble) {
-      player.inJail = false;
-      player.jailTurns = 0;
-      newState.message = `${player.name} lempar ganda dan bebas dari penjara!`;
-      newState.log.push(`${player.name} bebas dari penjara dengan doubles!`);
-      return moveAndLand(newState, roll.d1 + roll.d2);
-    } else {
-      player.jailTurns++;
-      if (player.jailTurns >= 3) {
-        player.money -= 50;
-        player.inJail = false;
-        player.jailTurns = 0;
-        newState.message = `${player.name} bayar M50 keluar penjara!`;
-        return moveAndLand(newState, roll.d1 + roll.d2);
-      }
-      newState.message = `${player.name} tidak dapat ganda (${roll.d1}+${roll.d2}). Giliran ke ${player.jailTurns}/3.`;
-      newState.log.push(`${player.name} masih di penjara (${player.jailTurns}/3)`);
-      newState.phase = "jail";
-      return advanceTurn(newState);
-    }
-  }
-
-  if (roll.isDouble) {
-    newState.doublesCount++;
-    if (newState.doublesCount >= 3) {
-      player.position = 10;
-      player.inJail = true;
-      player.jailTurns = 0;
-      newState.doublesCount = 0;
-      newState.message = `${player.name} lempar ganda 3 kali! Masuk penjara!`;
-      newState.log.push(`${player.name} masuk penjara karena doubles 3x!`);
-      newState.phase = "jail";
-      return advanceTurn(newState);
-    }
-  } else {
-    newState.doublesCount = 0;
-  }
-
-  newState.message = `${player.name} lempar ${roll.d1 + roll.d2} (${roll.d1}+${roll.d2})${roll.isDouble ? " - Doubles!" : ""}`;
-  newState.log.push(`${player.name} lempar ${roll.d1}+${roll.d2}=${roll.d1 + roll.d2}`);
-  return moveAndLand(newState, roll.d1 + roll.d2);
+  const roll = { d1: Math.floor(Math.random() * 6) + 1, d2: Math.floor(Math.random() * 6) + 1 };
+  return performRollWithValues(state, roll.d1, roll.d2);
 }
 
 function moveAndLand(state: GameState, steps: number): GameState {

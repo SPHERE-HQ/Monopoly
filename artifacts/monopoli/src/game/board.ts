@@ -51,20 +51,20 @@ export const BOARD_TILES: Tile[] = [
 ];
 
 export const GROUP_COLORS: Record<string, string> = {
-  "brown":     "#8B4513",
-  "light-blue":"#87CEEB",
-  "pink":      "#FF69B4",
-  "orange":    "#FFA500",
-  "red":       "#FF0000",
-  "yellow":    "#FFD700",
-  "green":     "#228B22",
-  "dark-blue": "#00008B",
-  "railroad":  "#333333",
-  "utility":   "#888888",
-  "tax":       "#555555",
-  "corner":    "#1a1a2e",
-  "chance":    "#FF6B35",
-  "community": "#4ECDC4",
+  "brown":     "#c0642a",
+  "light-blue":"#29b6f6",
+  "pink":      "#f06292",
+  "orange":    "#fb8c00",
+  "red":       "#e53935",
+  "yellow":    "#fdd835",
+  "green":     "#43a047",
+  "dark-blue": "#1565c0",
+  "railroad":  "#546e7a",
+  "utility":   "#78909c",
+  "tax":       "#ef9a9a",
+  "corner":    "#fffde7",
+  "chance":    "#ff8f00",
+  "community": "#00acc1",
 };
 
 export const PLAYER_COLORS: Record<string, string> = {
@@ -94,10 +94,9 @@ export function getTilePosition(tileId: number): [number, number, number] {
   }
 }
 
-// Rotation (Y-axis) so tile label faces outward from board edge
 export function getTileTextRotation(tileId: number): number {
-  if (tileId <= 10) return 0;          // bottom → faces camera
-  if (tileId <= 20) return Math.PI / 2;  // left column → faces left
-  if (tileId <= 30) return Math.PI;    // top → faces away
-  return -Math.PI / 2;                 // right column → faces right
+  if (tileId <= 10) return 0;
+  if (tileId <= 20) return Math.PI / 2;
+  if (tileId <= 30) return Math.PI;
+  return -Math.PI / 2;
 }

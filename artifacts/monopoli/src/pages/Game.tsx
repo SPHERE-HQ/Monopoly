@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { GameState, Player } from "../game/types";
 import {
   createInitialState, getCurrentPlayer, handleLanding, performRoll,
-  buyProperty, skipBuying, payRent, payTax, applyCard,
+  buyProperty, skipBuying, payRent, rebutProperty, payTax, applyCard,
   releaseFromJail, buildHouse,
 } from "../game/engine";
 import Board3D from "../components/Board3D";
@@ -33,7 +33,6 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
 
   const currentPlayer: Player = getCurrentPlayer(gameState);
 
-  // Auto-land after moving phase
   useEffect(() => {
     if (gameState.phase !== "moving") return;
     const t = setTimeout(() => setGameState(prev => handleLanding(prev)), 700);
@@ -66,12 +65,10 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-gray-950 touch-none select-none">
 
-      {/* ── 3D Board — full screen ─────────────────────────────────── */}
       <div className="absolute inset-0">
         <Board3D gameState={gameState} isRolling={isRolling} />
       </div>
 
-      {/* ── Top HUD ────────────────────────────────────────────────── */}
       <TopHUD
         gameState={gameState}
         currentPlayer={currentPlayer}
@@ -79,7 +76,6 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         onToggleLog={() => { setShowLog(v => !v); setShowPlayers(false); }}
       />
 
-      {/* ── Message banner ─────────────────────────────────────────── */}
       <div className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none"
         style={{ top: 52 }}>
         <div
@@ -90,7 +86,6 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         </div>
       </div>
 
-      {/* ── Dice emoji strip (bottom center, above action sheet) ───── */}
       {gameState.lastRoll && !isRolling && gameState.phase !== "moving" && (
         <div className="absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none"
           style={{ bottom: 78 }}>
@@ -107,7 +102,6 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         </div>
       )}
 
-      {/* Dice rolling shimmer */}
       {isRolling && (
         <div className="absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none"
           style={{ bottom: 78 }}>
@@ -121,7 +115,6 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         </div>
       )}
 
-      {/* ── Current player mini badge (bottom-left) ────────────────── */}
       <div
         className="absolute left-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full pointer-events-none"
         style={{
@@ -138,15 +131,15 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         {currentPlayer.inJail && <span className="text-[10px]">🔒</span>}
       </div>
 
-      {/* ── Action Sheet (bottom) ──────────────────────────────────── */}
       <ActionSheet
         gameState={gameState}
         currentPlayer={currentPlayer}
         isRolling={isRolling}
         onRoll={triggerRoll}
-        onBuy={() => setGameState(prev => buyProperty(prev))}
+        onBuy={(h) => setGameState(prev => buyProperty(prev, h))}
         onSkipBuy={() => setGameState(prev => skipBuying(prev))}
         onPayRent={() => setGameState(prev => payRent(prev))}
+        onRebut={() => setGameState(prev => rebutProperty(prev))}
         onPayTax={() => setGameState(prev => payTax(prev))}
         onCardAction={() => setGameState(prev => applyCard(prev))}
         onJailAction={handleJailAction}
@@ -156,7 +149,6 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         onRestartGame={onRestart}
       />
 
-      {/* ── Overlays ───────────────────────────────────────────────── */}
       {showPlayers && (
         <PlayerOverlay
           gameState={gameState}

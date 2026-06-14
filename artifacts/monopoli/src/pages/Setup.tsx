@@ -29,7 +29,6 @@ export default function Setup({ onStart }: SetupProps) {
       className="min-h-screen flex flex-col items-center justify-center p-4"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)" }}
     >
-      {/* Title */}
       <div className="text-center mb-6">
         <h1 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400"
           style={{ fontSize: "clamp(2.5rem, 10vw, 4rem)", lineHeight: 1 }}>
@@ -41,10 +40,8 @@ export default function Setup({ onStart }: SetupProps) {
       </div>
 
       <div className="w-full" style={{ maxWidth: "min(420px, 90vw)" }}>
-        {/* Card */}
         <div className="bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
 
-          {/* Player count selector */}
           <div className="p-4 border-b border-gray-700">
             <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Jumlah Pemain</p>
             <div className="flex gap-2">
@@ -65,7 +62,6 @@ export default function Setup({ onStart }: SetupProps) {
             </div>
           </div>
 
-          {/* Player name inputs */}
           <div className="p-4 space-y-2.5">
             {Array.from({ length: playerCount }).map((_, i) => (
               <div key={i} className="flex items-center gap-3">
@@ -98,7 +94,6 @@ export default function Setup({ onStart }: SetupProps) {
             ))}
           </div>
 
-          {/* Start button */}
           <div className="px-4 pb-4">
             <button
               onClick={handleStart}
@@ -114,7 +109,6 @@ export default function Setup({ onStart }: SetupProps) {
           </div>
         </div>
 
-        {/* Rules summary */}
         <div className="mt-3 bg-gray-800/40 rounded-xl p-3 border border-gray-700/60">
           <div className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1.5">📋 Aturan Singkat</div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1">

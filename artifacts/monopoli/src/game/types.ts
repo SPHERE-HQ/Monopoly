@@ -28,7 +28,9 @@ export interface Tile {
   ownerId?: number | null;
   houses: number;
   hotel: boolean;
+  landmark?: boolean;
   mortgaged: boolean;
+
 }
 
 export interface Player {
@@ -48,10 +50,12 @@ export interface Player {
 export type GamePhase =
   | "setup"
   | "rolling"
+  | "hold-dice"
   | "moving"
   | "landed"
   | "buying"
   | "paying-rent"
+  | "rebuting"
   | "chance"
   | "community-chest"
   | "income-tax"

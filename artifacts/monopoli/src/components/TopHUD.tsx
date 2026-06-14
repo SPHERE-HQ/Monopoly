@@ -13,7 +13,6 @@ export default function TopHUD({ gameState, currentPlayer, onToggleLog, onToggle
     <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-1.5 px-2 py-1.5"
       style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)" }}>
 
-      {/* Player chips */}
       <div className="flex gap-1.5 flex-1 min-w-0">
         {gameState.players.map(player => {
           const color = PLAYER_COLORS[player.color];
@@ -51,7 +50,6 @@ export default function TopHUD({ gameState, currentPlayer, onToggleLog, onToggle
         })}
       </div>
 
-      {/* Right controls */}
       <div className="flex gap-1.5 flex-shrink-0">
         <button
           onClick={onTogglePlayers}
