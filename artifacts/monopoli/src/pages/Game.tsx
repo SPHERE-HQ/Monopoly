@@ -3,7 +3,7 @@ import { GameState, Player } from "../game/types";
 import {
   createInitialState, getCurrentPlayer, handleLanding, performRoll,
   buyProperty, skipBuying, payRent, rebutProperty, payTax, applyCard,
-  releaseFromJail, buildHouse,
+  releaseFromJail, buildHouse, closeBuildingPanel,
 } from "../game/engine";
 import Board3D from "../components/Board3D";
 import TopHUD from "../components/TopHUD";
@@ -17,7 +17,8 @@ interface GameProps {
   onRestart: () => void;
 }
 
-const ROLL_ANIM_MS = 900;
+const ROLL_ANIM_MS = 1000;
+const STEP_MS = 230;
 
 export default function Game({ playerSetup, onRestart }: GameProps) {
   const [gameState, setGameState] = useState<GameState>(() =>
@@ -29,24 +30,74 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
   const [isRolling, setIsRolling] = useState(false);
   const [showPlayers, setShowPlayers] = useState(false);
   const [showLog, setShowLog] = useState(false);
-  const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Posisi visual pion untuk animasi langkah-per-langkah
+  const [pawnPositions, setPawnPositions] = useState<Record<number, number>>({});
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPositionRef = useRef<number>(0);
 
   const currentPlayer: Player = getCurrentPlayer(gameState);
 
+  // Animasi langkah-per-langkah saat phase === "moving"
   useEffect(() => {
-    if (gameState.phase !== "moving") return;
-    const t = setTimeout(() => setGameState(prev => handleLanding(prev)), 700);
-    return () => clearTimeout(t);
-  }, [gameState.phase, gameState.players[gameState.currentPlayerIndex]?.position]);
+    if (gameState.phase !== "moving") {
+      if (animIntervalRef.current) {
+        clearInterval(animIntervalRef.current);
+        animIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const player = gameState.players[gameState.currentPlayerIndex];
+    const target = player.position;
+    const origin = gameState.moveOrigin ?? target;
+    const totalSteps = ((target - origin + 40) % 40) || (target === origin ? 0 : 40);
+
+    if (totalSteps === 0) {
+      setGameState(prev => handleLanding(prev));
+      return;
+    }
+
+    let step = 0;
+    setPawnPositions(prev => ({ ...prev, [player.id]: origin }));
+
+    if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+
+    animIntervalRef.current = setInterval(() => {
+      step++;
+      const pos = (origin + step) % 40;
+      setPawnPositions(prev => ({ ...prev, [player.id]: pos }));
+
+      if (step >= totalSteps) {
+        clearInterval(animIntervalRef.current!);
+        animIntervalRef.current = null;
+        // Setelah semua langkah, hapus override dan proses landing
+        setTimeout(() => {
+          setPawnPositions(prev => {
+            const next = { ...prev };
+            delete next[player.id];
+            return next;
+          });
+          setGameState(prev => handleLanding(prev));
+        }, 300);
+      }
+    }, STEP_MS);
+
+    return () => {
+      if (animIntervalRef.current) clearInterval(animIntervalRef.current);
+    };
+  }, [gameState.phase, gameState.currentPlayerIndex]);
 
   const triggerRoll = useCallback(() => {
     setIsRolling(true);
-    if (rollTimer.current) clearTimeout(rollTimer.current);
-    rollTimer.current = setTimeout(() => {
+    if (rollTimerRef.current) clearTimeout(rollTimerRef.current);
+    prevPositionRef.current = currentPlayer.position;
+    rollTimerRef.current = setTimeout(() => {
       setIsRolling(false);
       setGameState(prev => performRoll(prev));
     }, ROLL_ANIM_MS);
-  }, []);
+  }, [currentPlayer.position]);
 
   const handleJailAction = useCallback((method: "card" | "pay" | "roll") => {
     if (method === "roll") triggerRoll();
@@ -54,19 +105,23 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
   }, [triggerRoll]);
 
   const handleToggleBuilding = useCallback(() => {
-    setGameState(prev => ({
-      ...prev,
-      phase: prev.phase === "building" ? "rolling" : "building",
-    }));
+    setGameState(prev => closeBuildingPanel(prev));
+  }, []);
+
+  const handleOpenBuilding = useCallback(() => {
+    setGameState(prev => ({ ...prev, phase: "building", buildingFromLanding: false }));
   }, []);
 
   const color = PLAYER_COLORS[currentPlayer.color];
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-gray-950 touch-none select-none">
-
       <div className="absolute inset-0">
-        <Board3D gameState={gameState} isRolling={isRolling} />
+        <Board3D
+          gameState={gameState}
+          isRolling={isRolling}
+          pawnPositions={pawnPositions}
+        />
       </div>
 
       <TopHUD
@@ -76,56 +131,27 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         onToggleLog={() => { setShowLog(v => !v); setShowPlayers(false); }}
       />
 
-      <div className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none"
-        style={{ top: 52 }}>
+      {/* Pesan status */}
+      <div className="absolute left-1/2 -translate-x-1/2 z-10 pointer-events-none" style={{ top: 52 }}>
         <div
-          className="text-white text-xs font-semibold px-4 py-1.5 rounded-full text-center border border-white/10 max-w-[70vw] truncate"
+          className="text-white text-xs font-semibold px-4 py-1.5 rounded-full text-center border border-white/10 max-w-[70vw]"
           style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)" }}
         >
           {isRolling ? "🎲 Melempar dadu..." : gameState.message}
         </div>
       </div>
 
-      {gameState.lastRoll && !isRolling && gameState.phase !== "moving" && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none"
-          style={{ bottom: 78 }}>
-          {gameState.lastRoll.map((val, i) => (
-            <div key={i}
-              className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl font-black text-gray-900 shadow-xl select-none"
-              style={{ animation: "diceSettle .3s ease-out" }}>
-              {["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][val]}
-            </div>
-          ))}
-          <div className="w-10 h-10 bg-gray-800 border border-gray-600 rounded-xl flex items-center justify-center text-sm font-bold text-yellow-300">
-            ={gameState.lastRoll[0] + gameState.lastRoll[1]}
-          </div>
-        </div>
-      )}
-
-      {isRolling && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-10 flex gap-2 pointer-events-none"
-          style={{ bottom: 78 }}>
-          {[0, 1].map(i => (
-            <div key={i}
-              className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xl font-black text-gray-900 border-2 border-yellow-400 select-none"
-              style={{ animation: "diceRoll .12s ease-in-out infinite" }}>
-              {["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][Math.floor(Math.random() * 6)]}
-            </div>
-          ))}
-        </div>
-      )}
-
+      {/* Indikator pemain & uang */}
       <div
         className="absolute left-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full pointer-events-none"
         style={{
-          bottom: 78,
+          bottom: 90,
           background: `${color}22`,
           border: `1px solid ${color}66`,
           backdropFilter: "blur(6px)",
         }}
       >
-        <div className="w-2.5 h-2.5 rounded-full animate-pulse"
-          style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
+        <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
         <span className="text-white font-bold text-xs">{currentPlayer.name}</span>
         <span className="text-green-400 font-black text-xs">M{currentPlayer.money.toLocaleString()}</span>
         {currentPlayer.inJail && <span className="text-[10px]">🔒</span>}
@@ -146,21 +172,15 @@ export default function Game({ playerSetup, onRestart }: GameProps) {
         onJailContinue={() => setGameState(prev => ({ ...prev, phase: "rolling" }))}
         onBuildHouse={id => setGameState(prev => buildHouse(prev, id))}
         onToggleBuilding={handleToggleBuilding}
+        onOpenBuilding={handleOpenBuilding}
         onRestartGame={onRestart}
       />
 
       {showPlayers && (
-        <PlayerOverlay
-          gameState={gameState}
-          currentPlayer={currentPlayer}
-          onClose={() => setShowPlayers(false)}
-        />
+        <PlayerOverlay gameState={gameState} currentPlayer={currentPlayer} onClose={() => setShowPlayers(false)} />
       )}
       {showLog && (
-        <LogOverlay
-          log={gameState.log}
-          onClose={() => setShowLog(false)}
-        />
+        <LogOverlay log={gameState.log} onClose={() => setShowLog(false)} />
       )}
     </div>
   );
