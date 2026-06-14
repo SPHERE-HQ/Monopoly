@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { GameState, Player, Tile } from "../game/types";
 
 interface ActionSheetProps {
@@ -15,26 +16,171 @@ interface ActionSheetProps {
   onJailContinue: () => void;
   onBuildHouse: (tileId: number) => void;
   onToggleBuilding: () => void;
+  onOpenBuilding: () => void;
   onRestartGame: () => void;
 }
 
-function getBuildLabel(tile: Tile): { icon: string; next: string; cost: number; isMax: boolean } {
-  if (tile.landmark) return { icon: "🏛️", next: "MAX", cost: 0, isMax: true };
-  if (tile.hotel)   return { icon: "🏨", next: "🏛️ Landmark", cost: (tile.hotelCost ?? tile.houseCost ?? 0) * 2, isMax: false };
-  const houseIcons = ["🏚️", "🏠", "🏠🏠", "🏠🏠🏠", "🏠🏠🏠🏠"];
-  const nextIcons  = ["🏠", "🏠🏠", "🏠🏠🏠", "🏠🏠🏠🏠", "🏨 Hotel"];
+const DICE_FACES = ["⚀","⚁","⚂","⚃","⚄","⚅"];
+
+function DiceSwipe({ onRoll, isRolling, lastRoll }: {
+  onRoll: () => void;
+  isRolling: boolean;
+  lastRoll: [number, number] | null;
+}) {
+  const [drag, setDrag] = useState<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
+  const [thrown, setThrown] = useState(false);
+  const [faces, setFaces] = useState<[number, number]>([1, 1]);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Kocok wajah dadu saat drag atau rolling
+  useEffect(() => {
+    if (!drag && !isRolling) {
+      if (lastRoll) setFaces(lastRoll);
+      return;
+    }
+    const iv = setInterval(() => {
+      setFaces([
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+      ]);
+    }, 70);
+    return () => clearInterval(iv);
+  }, [drag, isRolling, lastRoll]);
+
+  const getDelta = () => {
+    if (!drag) return { dx: 0, dy: 0, dist: 0 };
+    const dx = (drag.cx - drag.sx) * 0.35;
+    const dy = (drag.cy - drag.sy) * 0.35;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return { dx, dy, dist };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (isRolling || thrown) return;
+    e.preventDefault();
+    setDrag({ sx: e.clientX, sy: e.clientY, cx: e.clientX, cy: e.clientY });
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    setDrag(d => d ? { ...d, cx: e.clientX, cy: e.clientY } : null);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.sx;
+    const dy = e.clientY - drag.sy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    setDrag(null);
+    if (dist > 38) {
+      setThrown(true);
+      setTimeout(() => setThrown(false), 900);
+      onRoll();
+    }
+  };
+
+  const { dx, dy, dist } = getDelta();
+  const power = Math.min(100, (dist / 40) * 100);
+
+  return (
+    <div className="flex flex-col items-center gap-2 py-1 select-none">
+      {/* Power bar */}
+      <div
+        className="relative w-40 h-2 rounded-full overflow-hidden"
+        style={{ background: "rgba(255,255,255,0.1)", opacity: drag ? 1 : 0, transition: "opacity 0.15s" }}
+      >
+        <div
+          className="absolute left-0 top-0 h-full rounded-full transition-none"
+          style={{
+            width: `${power}%`,
+            background: power > 75
+              ? "linear-gradient(90deg, #22c55e, #ef4444)"
+              : "linear-gradient(90deg, #3b82f6, #22c55e)",
+          }}
+        />
+      </div>
+
+      {/* Dadu */}
+      <div
+        ref={containerRef}
+        className="flex gap-4 touch-none"
+        style={{
+          transform: thrown
+            ? "translateY(-40px) scale(0.7) rotate(360deg)"
+            : drag
+            ? `translate(${dx}px, ${dy}px) rotate(${dx * 0.8}deg)`
+            : "translate(0,0) rotate(0deg)",
+          transition: thrown
+            ? "transform 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97)"
+            : drag
+            ? "none"
+            : "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          cursor: isRolling ? "default" : "grab",
+          animation: isRolling && !thrown ? "diceShake 0.15s ease-in-out infinite" : undefined,
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => setDrag(null)}
+      >
+        {[0, 1].map(i => (
+          <div
+            key={i}
+            className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-4xl font-black"
+            style={{
+              boxShadow: drag
+                ? "0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.8)"
+                : "0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.8)",
+              transform: drag ? `rotate(${(i === 0 ? -1 : 1) * dx * 0.4}deg)` : "none",
+              transition: drag ? "none" : "transform 0.3s",
+              color: "#1a1a2e",
+            }}
+          >
+            {DICE_FACES[faces[i] - 1]}
+          </div>
+        ))}
+      </div>
+
+      {/* Label */}
+      {!isRolling && !thrown && (
+        <div className="text-center" style={{ minHeight: 20 }}>
+          {drag ? (
+            <span className={`text-xs font-bold ${power > 75 ? "text-red-400" : "text-yellow-300"} animate-pulse`}>
+              {power > 75 ? "🔥 Lepaskan!" : "↗ Geser lebih jauh..."}
+            </span>
+          ) : (
+            <span className="text-gray-500 text-xs">👆 Sentuh &amp; gesek dadu untuk lempar</span>
+          )}
+        </div>
+      )}
+      {isRolling && (
+        <div className="text-white text-xs font-semibold animate-pulse">🎲 Dadu menggelinding...</div>
+      )}
+    </div>
+  );
+}
+
+function getBuildLabel(tile: Tile) {
+  if (tile.landmark) return { icon: "🏛️", next: "MAX", cost: 0, isMax: true, label: "Landmark" };
+  if (tile.hotel) {
+    const cost = (tile.hotelCost ?? tile.houseCost ?? 0) * 2;
+    return { icon: "🏨", next: "🏛️ Landmark", cost, isMax: false, label: "Hotel", needsLanding: !tile.landmarkReady };
+  }
+  const icons = ["🏚️","🏠","🏠🏠","🏠🏠🏠","🏠🏠🏠🏠"];
+  const nexts = ["🏠 Rumah","🏠🏠 Rumah","🏢 Apartemen","🏢🏢 Apartemen","🏨 Hotel"];
+  const labels = ["Kosong","Rumah","Rumah","Apartemen","Apartemen"];
   const h = tile.houses;
-  if (h >= 4) return { icon: houseIcons[4], next: "🏨 Hotel", cost: tile.hotelCost ?? tile.houseCost ?? 0, isMax: false };
-  return { icon: houseIcons[h], next: nextIcons[h], cost: tile.houseCost ?? 0, isMax: false };
+  return { icon: icons[h], next: nexts[h], cost: tile.houseCost ?? 0, isMax: false, label: labels[h], needsLanding: false };
 }
 
 export default function ActionSheet({
   gameState, currentPlayer, isRolling,
   onRoll, onBuy, onSkipBuy, onPayRent, onRebut, onPayTax,
   onCardAction, onJailAction, onJailContinue,
-  onBuildHouse, onToggleBuilding, onRestartGame,
+  onBuildHouse, onToggleBuilding, onOpenBuilding, onRestartGame,
 }: ActionSheetProps) {
-  const { phase, tiles, currentCard, pendingRent, winner } = gameState;
+  const { phase, tiles, currentCard, pendingRent, winner, lastRoll } = gameState;
   const tile = tiles[currentPlayer.position];
 
   const buildableTiles = currentPlayer.properties
@@ -42,12 +188,15 @@ export default function ActionSheet({
     .filter(t => {
       if (t.type !== "property" || t.landmark) return false;
       const groupTiles = tiles.filter(gt => gt.group === t.group && gt.type === "property");
-      const allOwned = groupTiles.every(gt => gt.ownerId === currentPlayer.id);
-      if (!allOwned) return false;
-      const { cost } = getBuildLabel(t);
-      return currentPlayer.money >= cost;
+      return groupTiles.every(gt => gt.ownerId === currentPlayer.id);
     });
 
+  const canBuildAnything = buildableTiles.some(t => {
+    const { cost, needsLanding } = getBuildLabel(t);
+    return !needsLanding && currentPlayer.money >= cost;
+  });
+
+  // ── Game Over ──
   if (phase === "game-over" && winner) {
     return (
       <BottomSheet>
@@ -60,25 +209,32 @@ export default function ActionSheet({
     );
   }
 
+  // ── Lempar Dadu (hold-dice / rolling) — tampilkan DiceSwipe ala Line Get Rich ──
   if (phase === "hold-dice" || phase === "rolling") {
     return (
       <BottomSheet>
-        <div className="flex gap-2 items-center">
-          <div className="flex-1 min-w-0">
-            <div className="text-xs text-gray-400 truncate">📍 {tile.name}</div>
-            <div className="text-xs text-gray-500">M{currentPlayer.money.toLocaleString()}</div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <div className="text-xs text-gray-400 truncate">📍 {tile.name}</div>
+              <div className="text-xs text-gray-500">Saldo: M{currentPlayer.money.toLocaleString()}</div>
+            </div>
+            {canBuildAnything && (
+              <button
+                onClick={onOpenBuilding}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-green-800 border border-green-600/50 text-green-200 active:scale-95 transition-all"
+              >
+                🏗️ Bangun
+              </button>
+            )}
           </div>
-          {buildableTiles.length > 0 && (
-            <SmallBtn onClick={onToggleBuilding} color="bg-green-700">🏗️</SmallBtn>
-          )}
-          <BigBtn onClick={onRoll} color={isRolling ? "bg-gray-600" : "bg-blue-600"} disabled={isRolling}>
-            {isRolling ? "⏳ Melempar..." : "🎲 Lempar Dadu"}
-          </BigBtn>
+          <DiceSwipe onRoll={onRoll} isRolling={isRolling} lastRoll={lastRoll} />
         </div>
       </BottomSheet>
     );
   }
 
+  // ── Penjara ──
   if (phase === "jail" && currentPlayer.inJail) {
     return (
       <BottomSheet>
@@ -108,6 +264,7 @@ export default function ActionSheet({
     );
   }
 
+  // ── Beli properti ──
   if (phase === "buying") {
     const groupTiles = tiles.filter(gt => gt.group === tile.group && gt.type === "property");
     const ownsAll = groupTiles.every(gt => gt.ownerId === currentPlayer.id || gt.id === tile.id);
@@ -126,28 +283,23 @@ export default function ActionSheet({
             </div>
             <SmallBtn onClick={onSkipBuy} color="bg-gray-700">❌ Lewati</SmallBtn>
           </div>
-
           <div className="flex gap-1.5 flex-wrap">
             <BigBtn onClick={() => onBuy(0)} color="bg-green-700" disabled={currentPlayer.money < basePrice}>
               🏚️ Beli M{basePrice}
             </BigBtn>
-
-            {ownsAll && tile.type === "property" && [1, 2, 3, 4].map(h => {
+            {ownsAll && tile.type === "property" && [1,2,3,4].map(h => {
               const total = basePrice + (tile.houseCost ?? 0) * h;
-              const houseIcons = ["🏠", "🏠🏠", "🏠🏠🏠", "🏠🏠🏠🏠"];
+              const icons = ["🏠","🏠🏠","🏢","🏢🏢"];
               return (
-                <SmallBtn key={h} onClick={() => onBuy(h)} color="bg-green-800"
-                  disabled={currentPlayer.money < total}>
-                  {houseIcons[h - 1]} M{total}
+                <SmallBtn key={h} onClick={() => onBuy(h)} color="bg-green-800" disabled={currentPlayer.money < total}>
+                  {icons[h-1]} M{total}
                 </SmallBtn>
               );
             })}
-
             {ownsAll && tile.type === "property" && (() => {
               const total = basePrice + (tile.houseCost ?? 0) * 4 + (tile.hotelCost ?? tile.houseCost ?? 0);
               return (
-                <SmallBtn onClick={() => onBuy(5)} color="bg-red-800"
-                  disabled={currentPlayer.money < total}>
+                <SmallBtn onClick={() => onBuy(5)} color="bg-red-800" disabled={currentPlayer.money < total}>
                   🏨 Hotel M{total}
                 </SmallBtn>
               );
@@ -158,11 +310,11 @@ export default function ActionSheet({
     );
   }
 
+  // ── Bayar sewa / rebut ──
   if (phase === "paying-rent" && pendingRent) {
     const owner = gameState.players.find(p => p.id === pendingRent.ownerId);
     const isLandmark = tile.landmark;
     const canRebut = !isLandmark && currentPlayer.money >= pendingRent.amount + (tile.price ?? 0);
-    const rebutCost = pendingRent.amount + (tile.price ?? 0);
 
     return (
       <BottomSheet accent={isLandmark ? "border-yellow-500/60" : "border-red-500/60"}>
@@ -187,7 +339,7 @@ export default function ActionSheet({
             </BigBtn>
             {canRebut && (
               <BigBtn onClick={onRebut} color="bg-orange-600">
-                ⚔️ Rebut M{rebutCost}
+                ⚔️ Rebut M{pendingRent.amount + (tile.price ?? 0)}
               </BigBtn>
             )}
           </div>
@@ -196,14 +348,7 @@ export default function ActionSheet({
     );
   }
 
-  if (phase === "rebuting") {
-    return (
-      <BottomSheet accent="border-orange-500/60">
-        <div className="text-center text-orange-400 text-sm py-1 animate-pulse">⚔️ Merebut properti...</div>
-      </BottomSheet>
-    );
-  }
-
+  // ── Pajak ──
   if (phase === "income-tax" || phase === "luxury-tax") {
     const amount = tiles[currentPlayer.position].taxAmount ?? 0;
     const label = phase === "income-tax" ? "Pajak Penghasilan" : "Pajak Kemewahan";
@@ -220,6 +365,7 @@ export default function ActionSheet({
     );
   }
 
+  // ── Kartu Kesempatan / Kas Umum ──
   if (phase === "chance" || phase === "community-chest") {
     const isChance = phase === "chance";
     return (
@@ -237,46 +383,69 @@ export default function ActionSheet({
     );
   }
 
+  // ── Panel Bangunan ──
   if (phase === "building") {
+    const fromLanding = gameState.buildingFromLanding;
     return (
       <BottomSheet>
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-white font-bold text-sm">🏗️ Upgrade Properti</span>
+            <div>
+              <span className="text-white font-bold text-sm">🏗️ Upgrade Properti</span>
+              {fromLanding && (
+                <span className="ml-2 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 px-1.5 py-0.5 rounded-full">
+                  Peluang Landmark!
+                </span>
+              )}
+            </div>
             <SmallBtn onClick={onToggleBuilding} color="bg-gray-700">✓ Selesai</SmallBtn>
           </div>
-          <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
+          <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
             {buildableTiles.map(t => {
-              const { icon, next, cost, isMax } = getBuildLabel(t);
+              const { icon, next, cost, isMax, label, needsLanding } = getBuildLabel(t);
               const isLandmark = next.includes("Landmark");
+              const isHotelReady = isLandmark && !needsLanding;
+              const canAfford = isMax || needsLanding ? false : currentPlayer.money >= cost;
+
               return (
                 <button
                   key={t.id}
-                  onClick={() => !isMax && onBuildHouse(t.id)}
-                  disabled={isMax}
+                  onClick={() => !isMax && !needsLanding && canAfford && onBuildHouse(t.id)}
+                  disabled={isMax || needsLanding || !canAfford}
                   className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95
                     ${isMax
-                      ? "bg-yellow-900/40 border border-yellow-600/40 cursor-default"
-                      : isLandmark
-                      ? "bg-yellow-800/60 border border-yellow-500/60 hover:bg-yellow-700/60"
+                      ? "bg-yellow-900/40 border border-yellow-600/40 cursor-default opacity-70"
+                      : needsLanding
+                      ? "bg-gray-800/60 border border-gray-600/40 cursor-not-allowed opacity-50"
+                      : isHotelReady
+                      ? "bg-yellow-700/60 border border-yellow-500/60 hover:bg-yellow-600/60"
+                      : !canAfford
+                      ? "bg-gray-800/60 border border-gray-600/40 opacity-50 cursor-not-allowed"
                       : "bg-green-900/60 border border-green-600/40 hover:bg-green-800/60"
                     }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{icon}</span>
-                    <span className={isMax ? "text-yellow-400" : "text-white"}>{t.name}</span>
-                    {isMax && <span className="text-yellow-500 text-[10px] font-bold">🏛️ LANDMARK · Tidak bisa direbut</span>}
+                    <div>
+                      <div className={isMax ? "text-yellow-400" : needsLanding ? "text-gray-400" : "text-white"}>{t.name}</div>
+                      {isMax && <div className="text-yellow-500 text-[9px]">🏛️ LANDMARK AKTIF · Sewa ×2 · Tidak bisa direbut</div>}
+                      {needsLanding && <div className="text-gray-500 text-[9px]">⚠️ Harus mendarat di sini dulu</div>}
+                      {!isMax && !needsLanding && <div className="text-gray-500 text-[9px]">{label} → {next}</div>}
+                    </div>
                   </div>
-                  {!isMax && (
-                    <span className={`flex-shrink-0 font-bold ${isLandmark ? "text-yellow-300" : "text-green-300"}`}>
-                      {next} +M{cost}
+                  {!isMax && !needsLanding && (
+                    <span className={`flex-shrink-0 font-bold ${isHotelReady ? "text-yellow-300" : canAfford ? "text-green-300" : "text-gray-500"}`}>
+                      +M{cost}
                     </span>
                   )}
                 </button>
               );
             })}
             {buildableTiles.length === 0 && (
-              <div className="text-gray-500 text-xs text-center py-2">Tidak ada properti yang bisa di-upgrade</div>
+              <div className="text-gray-500 text-xs text-center py-3">
+                Belum ada properti yang bisa di-upgrade
+                <div className="text-gray-600 text-[10px] mt-1">Beli semua properti satu grup dulu</div>
+              </div>
             )}
           </div>
         </div>
@@ -284,11 +453,12 @@ export default function ActionSheet({
     );
   }
 
+  // ── Moving ──
   if (phase === "moving") {
     return (
       <BottomSheet>
         <div className="text-center text-gray-400 text-sm py-1">
-          <span className="animate-pulse">🚶 Memindahkan pion...</span>
+          <span className="animate-pulse">🚶 Pion melangkah...</span>
         </div>
       </BottomSheet>
     );
@@ -308,41 +478,25 @@ function BottomSheet({ children, accent }: { children: React.ReactNode; accent?:
   );
 }
 
-function BigBtn({
-  onClick, color, disabled = false, children,
-}: {
-  onClick: () => void;
-  color: string;
-  disabled?: boolean;
-  children: React.ReactNode;
+function BigBtn({ onClick, color, disabled = false, children }: {
+  onClick: () => void; color: string; disabled?: boolean; children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
+    <button onClick={onClick} disabled={disabled}
       className={`${color} disabled:opacity-40 text-white font-bold text-sm px-4 rounded-xl active:scale-95 transition-all flex-shrink-0 flex items-center justify-center`}
-      style={{ minHeight: 48, minWidth: 110 }}
-    >
+      style={{ minHeight: 48, minWidth: 110 }}>
       {children}
     </button>
   );
 }
 
-function SmallBtn({
-  onClick, color, disabled = false, children,
-}: {
-  onClick: () => void;
-  color: string;
-  disabled?: boolean;
-  children: React.ReactNode;
+function SmallBtn({ onClick, color, disabled = false, children }: {
+  onClick: () => void; color: string; disabled?: boolean; children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
+    <button onClick={onClick} disabled={disabled}
       className={`${color} disabled:opacity-40 text-white font-bold text-xs px-3 rounded-xl active:scale-95 transition-all flex-shrink-0 flex items-center justify-center`}
-      style={{ minHeight: 44 }}
-    >
+      style={{ minHeight: 44 }}>
       {children}
     </button>
   );
