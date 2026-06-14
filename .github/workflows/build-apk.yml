@@ -9,14 +9,16 @@ on:
 
 jobs:
   build:
-    name: Build APK
+    name: Build & Sign APK
     runs-on: ubuntu-latest
 
     steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      # ── Node.js + pnpm ────────────────────────────────────────────────────
+      - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -26,21 +28,18 @@ jobs:
         with:
           version: 10
 
-      - name: Get pnpm store directory
+      - name: Cache pnpm store
         id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Cache pnpm dependencies
         uses: actions/cache@v4
         with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+          restore-keys: ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
+      # ── Java + Android SDK ────────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -49,40 +48,50 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools-version: "34.0.0"
 
-      - name: Build web app
-        run: |
-          export BASE_PATH=/
-          export PORT=3000
-          pnpm --filter @workspace/monopoli run build
+      # ── Build web app ──────────────────────────────────────────────────────
+      - name: Build web app (Vite)
+        working-directory: artifacts/monopoli
+        run: pnpm run build
         env:
           NODE_ENV: production
+          BASE_PATH: /
+          PORT: "3000"
 
-      - name: Install Capacitor CLI
-        run: npm install -g @capacitor/cli
+      # ── Capacitor ─────────────────────────────────────────────────────────
+      - name: Install Capacitor CLI globally
+        run: npm install -g @capacitor/cli@latest
 
-      - name: Capacitor sync Android
+      - name: Capacitor add & sync Android
         working-directory: artifacts/monopoli
         run: |
           if [ ! -d "android" ]; then
-            cap add android
+            npx cap add android
           fi
-          cap sync android
+          npx cap sync android
 
+      # ── Gradle cache ──────────────────────────────────────────────────────
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            artifacts/monopoli/android/.gradle
-          key: ${{ runner.os }}-gradle-${{ hashFiles('artifacts/monopoli/android/**/*.gradle*') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('artifacts/monopoli/android/**/*.gradle*', 'artifacts/monopoli/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
+      # ── Make gradlew executable ────────────────────────────────────────────
+      - name: Make gradlew executable
+        working-directory: artifacts/monopoli/android
+        run: chmod +x gradlew
+
+      # ── Build debug APK (always) ──────────────────────────────────────────
       - name: Build debug APK
         working-directory: artifacts/monopoli/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -91,29 +100,30 @@ jobs:
           path: artifacts/monopoli/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      - name: Build release APK (signed)
-        if: github.ref == 'refs/heads/main' && env.KEYSTORE_BASE64 != ''
+      # ── Build release APK (signed, always on main) ────────────────────────
+      - name: Decode keystore
         working-directory: artifacts/monopoli/android
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+
+      - name: Build signed release APK
+        working-directory: artifacts/monopoli/android
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=$(pwd)/release.keystore \
-            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
-            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
-            -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
-            --no-daemon
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD" \
+            --no-daemon --stacktrace
 
-      - name: Upload release APK
-        if: github.ref == 'refs/heads/main' && env.KEYSTORE_BASE64 != ''
+      - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: monopoli-release-${{ github.run_number }}
+          name: monopoli-release-signed-${{ github.run_number }}
           path: artifacts/monopoli/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 90
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}

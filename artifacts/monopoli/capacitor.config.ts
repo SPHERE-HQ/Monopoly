@@ -8,14 +8,13 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   android: {
-    buildOptions: {
-      keystorePath: "release.keystore",
-      keystoreAlias: "monopoli",
-    },
+    allowMixedContent: true,
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0,
+      launchShowDuration: 1000,
+      backgroundColor: "#111827",
+      showSpinner: false,
     },
   },
 };

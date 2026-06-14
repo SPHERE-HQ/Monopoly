@@ -1,23 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="screen-orientation" content="landscape" />
+    <meta name="x5-orientation" content="landscape" />
+    <meta name="full-screen" content="yes" />
+    <meta name="browsermode" content="application" />
     <title>Monopoli 3D</title>
-    <meta name="description" content="Monopoli 3D — built on Replit. Update this description to reflect the app." />
-    <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Monopoli 3D" />
-    <meta property="og:description" content="Monopoli 3D — built on Replit. Update this description to reflect the app." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Monopoli 3D" />
-    <meta name="twitter:description" content="Monopoli 3D — built on Replit. Update this description to reflect the app." />
+    <meta name="description" content="Game Monopoli 3D berbasis Indonesia — 2 hingga 4 pemain lokal." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+      /* Force landscape on mobile */
+      @media screen and (orientation: portrait) {
+        #landscape-prompt {
+          display: flex !important;
+        }
+        #root {
+          display: none !important;
+        }
+      }
+      #landscape-prompt {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #111827;
+        color: white;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        font-family: 'Inter', sans-serif;
+        gap: 16px;
+      }
+      #landscape-prompt svg {
+        animation: rotate90 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes rotate90 {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(90deg); }
+      }
+    </style>
   </head>
   <body>
+    <!-- Landscape prompt for portrait mode -->
+    <div id="landscape-prompt">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+        <line x1="12" y1="18" x2="12" y2="18"/>
+      </svg>
+      <p style="font-size:1.1rem;font-weight:700;margin:0">Putar perangkat ke Landscape</p>
+      <p style="font-size:0.85rem;color:#9ca3af;margin:0">Game ini optimal dalam mode horizontal</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
