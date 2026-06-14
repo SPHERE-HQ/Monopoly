@@ -9,38 +9,25 @@ interface PlayerSetup {
 }
 
 export default function App() {
-  const [players, setPlayers] = useState<PlayerSetup[] | null>(null);
-  const [key, setKey] = useState(0);
+  const [playerSetup, setPlayerSetup] = useState<PlayerSetup[] | null>(null);
 
   useEffect(() => {
-    const lockLandscape = async () => {
-      try {
-        if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
-          await (screen.orientation as any).lock("landscape");
-        }
-      } catch {
-        // tidak didukung di desktop atau browser tertentu — diabaikan
-      }
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
     };
-    lockLandscape();
   }, []);
 
-  if (!players) {
-    return (
-      <Setup
-        onStart={(p) => setPlayers(p as PlayerSetup[])}
-      />
-    );
+  if (!playerSetup) {
+    return <Setup onStart={(players) => setPlayerSetup(players as PlayerSetup[])} />;
   }
 
   return (
     <Game
-      key={key}
-      playerSetup={players}
-      onRestart={() => {
-        setPlayers(null);
-        setKey(k => k + 1);
-      }}
+      playerSetup={playerSetup}
+      onRestart={() => setPlayerSetup(null)}
     />
   );
 }
